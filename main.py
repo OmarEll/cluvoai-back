@@ -32,7 +32,12 @@ async def lifespan(app: FastAPI):
         raise ValueError("OPENAI_API_KEY environment variable is required")
     
     # Connect to MongoDB
-    await connect_to_mongo()
+    try:
+        await connect_to_mongo()
+        print("✅ MongoDB connected successfully")
+    except Exception as e:
+        print(f"⚠️ MongoDB connection failed: {e}")
+        print("🔄 Application will start without database connection. Some features may be limited.")
     
     print("✅ Environment variables validated")
     print(f"✅ Using LLM model: {settings.llm_model}")
