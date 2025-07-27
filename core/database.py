@@ -25,11 +25,18 @@ async def connect_to_mongo():
         
         print("🔌 Connecting to MongoDB Atlas...")
         
-        # Create the client with ServerApi
+        # Create the client with ServerApi and SSL configuration for Railway
         db.client = AsyncIOMotorClient(
             connection_string, 
             server_api=ServerApi('1'),
-            serverSelectionTimeoutMS=5000
+            serverSelectionTimeoutMS=20000,
+            connectTimeoutMS=20000,
+            socketTimeoutMS=20000,
+            tls=True,
+            tlsAllowInvalidCertificates=False,
+            tlsAllowInvalidHostnames=False,
+            retryWrites=True,
+            w='majority'
         )
         
         # Test the connection
