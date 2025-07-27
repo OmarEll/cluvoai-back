@@ -81,10 +81,25 @@ class UserBase(BaseModel):
     email: EmailStr = Field(..., description="User's email address")
     birthday: Optional[date] = Field(None, description="User's birth date")
     experience_level: Optional[ExperienceLevel] = Field(None, description="User's business experience level")
+    
+    # Google OAuth fields
+    google_id: Optional[str] = Field(None, description="User's Google ID")
+    profile_picture: Optional[str] = Field(None, description="User's profile picture URL")
+    is_oauth_user: bool = Field(default=False, description="Whether user signed up via OAuth")
 
 
 class UserCreate(UserBase):
     password: str = Field(..., min_length=8, max_length=128, description="User's password")
+
+
+class GoogleOAuthUser(BaseModel):
+    """Model for Google OAuth user data"""
+    google_id: str = Field(..., description="User's Google ID")
+    email: EmailStr = Field(..., description="User's email address")
+    first_name: str = Field(..., description="User's first name")
+    last_name: str = Field(..., description="User's last name")
+    profile_picture: Optional[str] = Field(None, description="User's profile picture URL")
+    verified_email: bool = Field(default=True, description="Whether email is verified by Google")
 
 
 class UserUpdate(BaseModel):

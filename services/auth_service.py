@@ -4,10 +4,12 @@ import bcrypt
 from jose import JWTError, jwt
 from pymongo.errors import DuplicateKeyError
 from fastapi import HTTPException, status
+import uuid
 
-from core.user_models import UserCreate, UserInDB, UserResponse, UserRole, TokenData
+from core.user_models import UserCreate, UserInDB, UserResponse, UserRole, TokenData, GoogleOAuthUser
 from core.database import get_users_collection
 from config.settings import settings
+from services.google_oauth_service import google_oauth_service
 
 
 class AuthService:
@@ -66,104 +68,193 @@ class AuthService:
     async def create_user(self, user_data: UserCreate) -> UserResponse:
         """Create a new user"""
         try:
-            # Hash the password
+            # Check if user already exists
+            existing_user = await self.users_collection().find_one({"email": user_data.email})
+            if existing_user:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Email already registered"
+                )
+            
+            # Hash password
             hashed_password = self.hash_password(user_data.password)
             
-            # Prepare user document
+            # Create user document
             user_doc = {
+                "id": str(uuid.uuid4()),
                 "first_name": user_data.first_name,
                 "last_name": user_data.last_name,
-                "email": user_data.email.lower(),  # Store email in lowercase
-                "birthday": getattr(user_data, 'birthday', None),
-                "experience_level": getattr(user_data, 'experience_level', None),
+                "email": user_data.email,
                 "hashed_password": hashed_password,
+                "birthday": user_data.birthday,
+                "experience_level": user_data.experience_level,
+                "google_id": user_data.google_id,
+                "profile_picture": user_data.profile_picture,
+                "is_oauth_user": user_data.is_oauth_user,
                 "role": UserRole.USER,
                 "is_active": True,
                 "created_at": datetime.utcnow(),
-                "last_login": None,
-                "ideas": []  # Initialize empty ideas array
+                "updated_at": datetime.utcnow(),
+                "ideas": []
             }
             
             # Insert user into database
             result = await self.users_collection().insert_one(user_doc)
             
-            # Create response object
-            user_response = UserResponse(
-                id=str(result.inserted_id),
-                first_name=user_data.first_name,
-                last_name=user_data.last_name,
-                email=user_data.email,
-                birthday=user_doc.get("birthday"),
-                experience_level=user_doc.get("experience_level"),
-                role=UserRole.USER,
-                is_active=True,
-                created_at=user_doc["created_at"],
-                ideas=[]
-            )
-            
-            return user_response
-            
+            if result.inserted_id:
+                return UserResponse(
+                    id=user_doc["id"],
+                    first_name=user_doc["first_name"],
+                    last_name=user_doc["last_name"],
+                    email=user_doc["email"],
+                    birthday=user_doc["birthday"],
+                    experience_level=user_doc["experience_level"],
+                    google_id=user_doc["google_id"],
+                    profile_picture=user_doc["profile_picture"],
+                    is_oauth_user=user_doc["is_oauth_user"],
+                    role=user_doc["role"],
+                    is_active=user_doc["is_active"]
+                )
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to create user"
+                )
+                
         except DuplicateKeyError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Email already registered"
             )
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error creating user: {str(e)}"
-            )
     
-    async def get_user_by_email(self, email: str) -> Optional[UserInDB]:
-        """Get user by email"""
+    async def create_google_user(self, google_user_data: GoogleOAuthUser) -> UserResponse:
+        """Create a user from Google OAuth data"""
         try:
-            user_doc = await self.users_collection().find_one({"email": email.lower()})
-            if user_doc:
-                return UserInDB(
-                    id=str(user_doc["_id"]),
+            # Check if user already exists by email or Google ID
+            existing_user = await self.users_collection().find_one({
+                "$or": [
+                    {"email": google_user_data.email},
+                    {"google_id": google_user_data.google_id}
+                ]
+            })
+            
+            if existing_user:
+                # User exists, update their Google info if needed
+                update_data = {
+                    "google_id": google_user_data.google_id,
+                    "profile_picture": google_user_data.profile_picture,
+                    "is_oauth_user": True,
+                    "updated_at": datetime.utcnow()
+                }
+                
+                await self.users_collection().update_one(
+                    {"id": existing_user["id"]},
+                    {"$set": update_data}
+                )
+                
+                return UserResponse(
+                    id=existing_user["id"],
+                    first_name=existing_user["first_name"],
+                    last_name=existing_user["last_name"],
+                    email=existing_user["email"],
+                    birthday=existing_user.get("birthday"),
+                    experience_level=existing_user.get("experience_level"),
+                    google_id=google_user_data.google_id,
+                    profile_picture=google_user_data.profile_picture,
+                    is_oauth_user=True,
+                    role=existing_user.get("role", UserRole.USER),
+                    is_active=existing_user.get("is_active", True)
+                )
+            
+            # Create new user from Google data
+            user_doc = {
+                "id": str(uuid.uuid4()),
+                "first_name": google_user_data.first_name,
+                "last_name": google_user_data.last_name,
+                "email": google_user_data.email,
+                "hashed_password": None,  # No password for OAuth users
+                "birthday": None,
+                "experience_level": None,
+                "google_id": google_user_data.google_id,
+                "profile_picture": google_user_data.profile_picture,
+                "is_oauth_user": True,
+                "role": UserRole.USER,
+                "is_active": True,
+                "created_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow(),
+                "ideas": []
+            }
+            
+            # Insert user into database
+            result = await self.users_collection().insert_one(user_doc)
+            
+            if result.inserted_id:
+                return UserResponse(
+                    id=user_doc["id"],
                     first_name=user_doc["first_name"],
                     last_name=user_doc["last_name"],
                     email=user_doc["email"],
-                    birthday=user_doc.get("birthday"),
-                    experience_level=user_doc.get("experience_level"),
+                    birthday=user_doc["birthday"],
+                    experience_level=user_doc["experience_level"],
+                    google_id=user_doc["google_id"],
+                    profile_picture=user_doc["profile_picture"],
+                    is_oauth_user=user_doc["is_oauth_user"],
                     role=user_doc["role"],
-                    is_active=user_doc["is_active"],
-                    created_at=user_doc["created_at"],
-                    last_login=user_doc.get("last_login"),
-                    hashed_password=user_doc["hashed_password"],
-                    ideas=[]  # Will be populated by user management service
+                    is_active=user_doc["is_active"]
                 )
-            return None
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to create user"
+                )
+                
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error fetching user: {str(e)}"
+                detail=f"Failed to create Google user: {str(e)}"
             )
     
     async def authenticate_user(self, email: str, password: str) -> Optional[UserInDB]:
         """Authenticate a user with email and password"""
-        user = await self.get_user_by_email(email)
+        user = await self.users_collection().find_one({"email": email})
         if not user:
             return None
-        if not self.verify_password(password, user.hashed_password):
+        
+        # Check if this is an OAuth user (no password)
+        if user.get("is_oauth_user", False) and not user.get("hashed_password"):
             return None
-        return user
+        
+        if not self.verify_password(password, user["hashed_password"]):
+            return None
+        
+        return UserInDB(**user)
     
-    async def update_last_login(self, email: str):
-        """Update user's last login timestamp"""
-        try:
-            await self.users_collection().update_one(
-                {"email": email.lower()},
-                {"$set": {"last_login": datetime.utcnow()}}
-            )
-        except Exception as e:
-            print(f"Error updating last login: {e}")
+    async def get_user_by_email(self, email: str) -> Optional[UserInDB]:
+        """Get user by email"""
+        user = await self.users_collection().find_one({"email": email})
+        if user:
+            return UserInDB(**user)
+        return None
+    
+    async def get_user_by_google_id(self, google_id: str) -> Optional[UserInDB]:
+        """Get user by Google ID"""
+        user = await self.users_collection().find_one({"google_id": google_id})
+        if user:
+            return UserInDB(**user)
+        return None
     
     async def get_current_user_email(self, token: str) -> str:
-        """Get current user email from JWT token"""
+        """Get current user email from token"""
         token_data = self.verify_token(token)
         return token_data.email
 
+    async def get_user_by_id(self, user_id: str) -> Optional[UserInDB]:
+        """Get user by ID"""
+        user = await self.users_collection().find_one({"id": user_id})
+        if user:
+            return UserInDB(**user)
+        return None
 
-# Create global instance
+
+# Create singleton instance
 auth_service = AuthService() 

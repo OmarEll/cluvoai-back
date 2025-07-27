@@ -5,9 +5,13 @@ from datetime import timedelta
 from core.user_models import UserCreate, UserResponse, UserLogin, Token, UserInDB
 from services.auth_service import auth_service
 from config.settings import settings
+from api.google_auth_routes import router as google_auth_router
 
 router = APIRouter()
 security = HTTPBearer()
+
+# Include Google OAuth routes
+router.include_router(google_auth_router, prefix="/oauth", tags=["Google OAuth"])
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
