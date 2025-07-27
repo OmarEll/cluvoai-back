@@ -151,3 +151,6 @@ temp/
 tmp/
 uploads/
 downloads/ 
+
+
+test_*.py
