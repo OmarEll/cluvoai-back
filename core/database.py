@@ -16,39 +16,78 @@ db = MongoDB()
 async def connect_to_mongo():
     """Create database connection"""
     try:
-        # Build MongoDB connection string for Atlas
+        # Build MongoDB connection string for Atlas with SSL parameters for Railway
         if settings.mongo_user and settings.mongo_pwd:
-            # Your MongoDB Atlas connection (updated with correct cluster)
-            connection_string = f"mongodb+srv://{settings.mongo_user}:{settings.mongo_pwd}@cluster0.cpe8ojr.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+            # Your MongoDB Atlas connection with SSL parameters for Railway
+            connection_string = f"mongodb+srv://{settings.mongo_user}:{settings.mongo_pwd}@cluster0.cpe8ojr.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0&ssl=true&ssl_cert_reqs=CERT_NONE&ssl_ca_certs="
         else:
             raise ValueError("MongoDB credentials are required. Please set MONGO_USER and MONGO_PWD in your .env file.")
         
         print("🔌 Connecting to MongoDB Atlas...")
         
-        # Create the client with ServerApi and SSL configuration for Railway
-        db.client = AsyncIOMotorClient(
-            connection_string, 
-            server_api=ServerApi('1'),
-            serverSelectionTimeoutMS=20000,
-            connectTimeoutMS=20000,
-            socketTimeoutMS=20000,
-            tls=True,
-            tlsAllowInvalidCertificates=False,
-            tlsAllowInvalidHostnames=False,
-            retryWrites=True,
-            w='majority'
-        )
+        # Try multiple connection configurations for Railway compatibility
+        connection_configs = [
+            # Configuration 1: Standard with SSL
+            {
+                "connection_string": connection_string,
+                "options": {
+                    "server_api": ServerApi('1'),
+                    "serverSelectionTimeoutMS": 30000,
+                    "connectTimeoutMS": 30000,
+                    "socketTimeoutMS": 30000,
+                    "tls": True,
+                    "tlsAllowInvalidCertificates": True,
+                    "tlsAllowInvalidHostnames": True,
+                    "retryWrites": True,
+                    "w": 'majority',
+                    "maxPoolSize": 10,
+                    "minPoolSize": 1
+                }
+            },
+            # Configuration 2: Without SSL (fallback)
+            {
+                "connection_string": connection_string.replace("&ssl=true&ssl_cert_reqs=CERT_NONE&ssl_ca_certs=", ""),
+                "options": {
+                    "server_api": ServerApi('1'),
+                    "serverSelectionTimeoutMS": 30000,
+                    "connectTimeoutMS": 30000,
+                    "socketTimeoutMS": 30000,
+                    "retryWrites": True,
+                    "w": 'majority',
+                    "maxPoolSize": 10,
+                    "minPoolSize": 1
+                }
+            }
+        ]
         
-        # Test the connection
-        await db.client.admin.command('ping')
+        for i, config in enumerate(connection_configs, 1):
+            try:
+                print(f"🔄 Trying connection configuration {i}...")
+                db.client = AsyncIOMotorClient(
+                    config["connection_string"],
+                    **config["options"]
+                )
+                
+                # Test the connection
+                await db.client.admin.command('ping')
+                
+                # Set the database
+                db.database = db.client[settings.mongo_database]
+                
+                # Create indexes for users collection
+                await create_indexes()
+                
+                print(f"✅ Connected to MongoDB Atlas successfully with configuration {i}!")
+                return
+                
+            except Exception as e:
+                print(f"⚠️ Configuration {i} failed: {e}")
+                if db.client:
+                    db.client.close()
+                continue
         
-        # Set the database
-        db.database = db.client[settings.mongo_database]
-        
-        # Create indexes for users collection
-        await create_indexes()
-        
-        print("✅ Connected to MongoDB Atlas successfully!")
+        # If all configurations fail
+        raise Exception("All MongoDB connection configurations failed")
         
     except ServerSelectionTimeoutError as e:
         print(f"❌ Failed to connect to MongoDB: {e}")
