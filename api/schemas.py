@@ -1,0 +1,98 @@
+from pydantic import BaseModel, Field
+from typing import Optional
+from core.competitor_models import CompetitorReport
+
+
+class CompetitorAnalysisRequest(BaseModel):
+    """
+    Request schema for competitor analysis
+    """
+    idea_description: str = Field(
+        ..., 
+        description="Description of the business idea",
+        example="AI-powered HR recruitment tool for small businesses"
+    )
+    target_market: Optional[str] = Field(
+        None,
+        description="Target market or customer segment", 
+        example="Small to medium businesses with 10-100 employees"
+    )
+    business_model: Optional[str] = Field(
+        None,
+        description="Business/revenue model",
+        example="SaaS subscription model with freemium tier"
+    )
+    geographic_focus: Optional[str] = Field(
+        None,
+        description="Target geographic markets",
+        example="North America and Europe"
+    )
+    industry: Optional[str] = Field(
+        None,
+        description="Industry vertical",
+        example="Human Resources Technology"
+    )
+    idea_id: Optional[str] = Field(
+        None,
+        description="Business idea ID (for authenticated users to save results)",
+        example="550e8400-e29b-41d4-a716-446655440000"
+    )
+
+
+class CompetitorAnalysisResponse(BaseModel):
+    """
+    Response schema for competitor analysis
+    """
+    status: str = Field(
+        ...,
+        description="Analysis status",
+        example="completed"
+    )
+    report: Optional[CompetitorReport] = Field(
+        None,
+        description="Competitive intelligence report"
+    )
+    analysis_id: Optional[str] = Field(
+        None,
+        description="Analysis ID (included when saved for authenticated users)",
+        example="550e8400-e29b-41d4-a716-446655440000"
+    )
+    message: str = Field(
+        ...,
+        description="Response message",
+        example="Analysis completed successfully"
+    )
+
+
+class AnalysisStatusResponse(BaseModel):
+    """
+    Response schema for analysis status check
+    """
+    status: str = Field(
+        ...,
+        description="Current analysis status",
+        example="processing"
+    )
+    progress: Optional[int] = Field(
+        None,
+        description="Progress percentage (0-100)",
+        example=75
+    )
+    started_at: Optional[str] = Field(
+        None,
+        description="Analysis start timestamp",
+        example="2024-01-15T10:30:00Z"
+    )
+    completed_at: Optional[str] = Field(
+        None,
+        description="Analysis completion timestamp"
+    )
+    message: str = Field(
+        ...,
+        description="Status message",
+        example="Analysis in progress"
+    )
+    error: Optional[str] = Field(
+        None,
+        description="Error message if analysis failed"
+    )
