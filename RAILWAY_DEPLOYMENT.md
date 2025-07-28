@@ -13,7 +13,7 @@ Set these environment variables in your Railway project:
 ### Required Variables
 
 ```bash
-# OpenAI API Key
+# OpenAI API Key (for Railway deployment)
 OPENAI_API_KEY=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
 
 # MongoDB Configuration
