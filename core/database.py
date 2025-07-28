@@ -16,21 +16,22 @@ db = MongoDB()
 async def connect_to_mongo():
     """Create database connection"""
     try:
-        # Build MongoDB connection string for Atlas
+        # Build MongoDB connection string
         if settings.mongo_user and settings.mongo_pwd:
-            connection_string = f"mongodb+srv://{settings.mongo_user}:{settings.mongo_pwd}@cluster0.cpe8ojr.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+            # Use the MONGO_HOST from settings instead of hardcoded cluster
+            connection_string = f"mongodb+srv://{settings.mongo_user}:{settings.mongo_pwd}@{settings.mongo_host}/?retryWrites=true&w=majority"
         else:
             raise ValueError("MongoDB credentials are required. Please set MONGO_USER and MONGO_PWD in your .env file.")
         
-        print("🔌 Connecting to MongoDB Atlas...")
+        print(f"🔌 Connecting to MongoDB at {settings.mongo_host}...")
         
         # Create the client with minimal configuration
         db.client = AsyncIOMotorClient(
             connection_string,
             server_api=ServerApi('1'),
-            serverSelectionTimeoutMS=5000,
-            connectTimeoutMS=5000,
-            socketTimeoutMS=5000
+            serverSelectionTimeoutMS=10000,  # Increased timeout for Railway
+            connectTimeoutMS=10000,  # Increased timeout for Railway
+            socketTimeoutMS=10000  # Increased timeout for Railway
         )
         
         # Test the connection
@@ -39,7 +40,7 @@ async def connect_to_mongo():
         # Set the database
         db.database = db.client[settings.mongo_database]
         
-        print("✅ Connected to MongoDB Atlas successfully!")
+        print("✅ Connected to MongoDB successfully!")
         
     except Exception as e:
         print(f"❌ Database connection error: {e}")

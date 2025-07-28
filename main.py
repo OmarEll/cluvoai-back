@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import uvicorn
+import os
 from contextlib import asynccontextmanager
 
 from api.competitor_routes import router as competitor_router
@@ -15,7 +16,7 @@ from api.onboarding_routes import router as onboarding_router
 from api.business_model_routes import router as business_model_router
 from api.business_model_canvas_routes import router as business_model_canvas_router
 from api.customer_discovery_routes import router as customer_discovery_router
-from core.database import connect_to_mongo, close_mongo_connection
+from core.database import connect_to_mongo, close_mongo_connection, db
 from config.settings import settings
 
 
@@ -29,7 +30,10 @@ async def lifespan(app: FastAPI):
     
     # Validate required environment variables
     if not settings.openai_api_key:
-        raise ValueError("OPENAI_API_KEY environment variable is required")
+        print("⚠️ WARNING: OPENAI_API_KEY environment variable is not set")
+        print("🔄 Some AI features may not work properly")
+    else:
+        print("✅ OpenAI API key configured")
     
     # Connect to MongoDB
     try:
@@ -38,6 +42,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"⚠️ MongoDB connection failed: {e}")
         print("🔄 Application will start without database connection. Some features may be limited.")
+        print("💡 Make sure to set MONGO_USER, MONGO_PWD, and MONGO_HOST environment variables")
     
     print("✅ Environment variables validated")
     print(f"✅ Using LLM model: {settings.llm_model}")
@@ -93,11 +98,14 @@ app.include_router(customer_discovery_router, prefix="/api/v1", tags=["Customer 
 @app.get("/")
 async def root():
     """
-    Root endpoint
+    Root endpoint and health check
     """
     return {
         "service": "Cluvo.ai AI Business Intelligence API",
         "version": "1.0.0",
+        "status": "healthy",
+        "database": "connected" if db.database else "disconnected"
+    }
         "status": "operational",
         "features": [
             "AI-powered competitor analysis",
@@ -228,10 +236,13 @@ async def global_exception_handler(request, exc):
 
 
 if __name__ == "__main__":
+    # Get port from environment variable (Railway sets PORT)
+    port = int(os.environ.get("PORT", 8000))
+    
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
-        port=8000,
-        reload=True,
+        port=port,
+        reload=False,  # Disable reload in production
         log_level="info"
     )
