@@ -15,7 +15,23 @@ from services.google_oauth_service import google_oauth_service
 class AuthService:
     def __init__(self):
         self.users_collection = get_users_collection
-        
+    
+    def _check_database_connection(self):
+        """Check if database connection is available"""
+        try:
+            collection = self.users_collection()
+            if collection is None:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Database connection is not available. Please try again later."
+                )
+            return collection
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"Database connection error: {str(e)}"
+            )
+    
     @staticmethod
     def hash_password(password: str) -> str:
         """Hash a password using bcrypt"""
@@ -68,8 +84,11 @@ class AuthService:
     async def create_user(self, user_data: UserCreate) -> UserResponse:
         """Create a new user"""
         try:
+            # Check database connection
+            users_collection = self._check_database_connection()
+            
             # Check if user already exists
-            existing_user = await self.users_collection().find_one({"email": user_data.email})
+            existing_user = await users_collection.find_one({"email": user_data.email})
             if existing_user:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -86,10 +105,10 @@ class AuthService:
                 "last_name": user_data.last_name,
                 "email": user_data.email,
                 "hashed_password": hashed_password,
-                "birthday": user_data.birthday,
-                "experience_level": user_data.experience_level,
-                "google_id": user_data.google_id,
-                "profile_picture": user_data.profile_picture,
+                "birthday": None,
+                "experience_level": None,
+                "google_id": None,
+                "profile_picture": None,
                 "is_oauth_user": user_data.is_oauth_user,
                 "role": UserRole.USER,
                 "is_active": True,
@@ -99,7 +118,7 @@ class AuthService:
             }
             
             # Insert user into database
-            result = await self.users_collection().insert_one(user_doc)
+            result = await users_collection.insert_one(user_doc)
             
             if result.inserted_id:
                 return UserResponse(
@@ -126,12 +145,22 @@ class AuthService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Email already registered"
             )
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to create user: {str(e)}"
+            )
     
     async def create_google_user(self, google_user_data: GoogleOAuthUser) -> UserResponse:
         """Create a user from Google OAuth data"""
         try:
+            # Check database connection
+            users_collection = self._check_database_connection()
+            
             # Check if user already exists by email or Google ID
-            existing_user = await self.users_collection().find_one({
+            existing_user = await users_collection.find_one({
                 "$or": [
                     {"email": google_user_data.email},
                     {"google_id": google_user_data.google_id}
@@ -147,7 +176,7 @@ class AuthService:
                     "updated_at": datetime.utcnow()
                 }
                 
-                await self.users_collection().update_one(
+                await users_collection.update_one(
                     {"id": existing_user["id"]},
                     {"$set": update_data}
                 )
@@ -186,7 +215,7 @@ class AuthService:
             }
             
             # Insert user into database
-            result = await self.users_collection().insert_one(user_doc)
+            result = await users_collection.insert_one(user_doc)
             
             if result.inserted_id:
                 return UserResponse(
@@ -208,6 +237,8 @@ class AuthService:
                     detail="Failed to create user"
                 )
                 
+        except HTTPException:
+            raise
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -216,32 +247,66 @@ class AuthService:
     
     async def authenticate_user(self, email: str, password: str) -> Optional[UserInDB]:
         """Authenticate a user with email and password"""
-        user = await self.users_collection().find_one({"email": email})
-        if not user:
-            return None
-        
-        # Check if this is an OAuth user (no password)
-        if user.get("is_oauth_user", False) and not user.get("hashed_password"):
-            return None
-        
-        if not self.verify_password(password, user["hashed_password"]):
-            return None
-        
-        return UserInDB(**user)
+        try:
+            # Check database connection
+            users_collection = self._check_database_connection()
+            
+            user_data = await users_collection.find_one({"email": email})
+            if not user_data:
+                return None
+            
+            # Check if this is an OAuth user (no password)
+            if user_data.get("is_oauth_user", False) and not user_data.get("hashed_password"):
+                return None
+            
+            if not self.verify_password(password, user_data["hashed_password"]):
+                return None
+            
+            # Convert MongoDB document to UserInDB using the from_mongo method
+            return UserInDB.from_mongo(user_data)
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Authentication failed: {str(e)}"
+            )
     
     async def get_user_by_email(self, email: str) -> Optional[UserInDB]:
         """Get user by email"""
-        user = await self.users_collection().find_one({"email": email})
-        if user:
-            return UserInDB(**user)
-        return None
+        try:
+            # Check database connection
+            users_collection = self._check_database_connection()
+            
+            user_data = await users_collection.find_one({"email": email})
+            if user_data:
+                return UserInDB.from_mongo(user_data)
+            return None
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to get user: {str(e)}"
+            )
     
     async def get_user_by_google_id(self, google_id: str) -> Optional[UserInDB]:
         """Get user by Google ID"""
-        user = await self.users_collection().find_one({"google_id": google_id})
-        if user:
-            return UserInDB(**user)
-        return None
+        try:
+            # Check database connection
+            users_collection = self._check_database_connection()
+            
+            user_data = await users_collection.find_one({"google_id": google_id})
+            if user_data:
+                return UserInDB.from_mongo(user_data)
+            return None
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to get user: {str(e)}"
+            )
     
     async def get_current_user_email(self, token: str) -> str:
         """Get current user email from token"""
@@ -250,10 +315,37 @@ class AuthService:
 
     async def get_user_by_id(self, user_id: str) -> Optional[UserInDB]:
         """Get user by ID"""
-        user = await self.users_collection().find_one({"id": user_id})
-        if user:
-            return UserInDB(**user)
-        return None
+        try:
+            # Check database connection
+            users_collection = self._check_database_connection()
+            
+            user_data = await users_collection.find_one({"id": user_id})
+            if user_data:
+                return UserInDB.from_mongo(user_data)
+            return None
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to get user: {str(e)}"
+            )
+
+    async def update_last_login(self, email: str):
+        """Update user's last login timestamp"""
+        try:
+            # Check database connection
+            users_collection = self._check_database_connection()
+            
+            await users_collection.update_one(
+                {"email": email},
+                {"$set": {"last_login": datetime.utcnow()}}
+            )
+        except HTTPException:
+            raise
+        except Exception as e:
+            # Don't fail the login if this update fails
+            print(f"Warning: Failed to update last login for {email}: {str(e)}")
 
 
 # Create singleton instance

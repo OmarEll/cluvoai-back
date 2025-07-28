@@ -61,29 +61,41 @@ def get_database() -> AsyncIOMotorDatabase:
 # Collection getters
 def get_users_collection():
     """Get users collection"""
+    if db.database is None:
+        return None
     return db.database.users
 
 
 def get_analyses_collection():
     """Get analyses collection for storing competitor analysis results"""
+    if db.database is None:
+        return None
     return db.database.analyses
 
 
 def get_personas_collection():
     """Get personas collection for storing persona analysis results"""
+    if db.database is None:
+        return None
     return db.database.personas
 
 
 def get_saved_analyses_collection():
     """Get saved analyses collection"""
+    if db.database is None:
+        return None
     return db.database.saved_analyses
 
 
 def get_user_ideas_collection():
     """Get user ideas collection"""
+    if db.database is None:
+        return None
     return db.database.user_ideas
 
 
 def get_feedback_collection():
     """Get feedback collection"""
+    if db.database is None:
+        return None
     return db.database.feedback 

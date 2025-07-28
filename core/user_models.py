@@ -88,7 +88,11 @@ class UserBase(BaseModel):
     is_oauth_user: bool = Field(default=False, description="Whether user signed up via OAuth")
 
 
-class UserCreate(UserBase):
+class UserCreate(BaseModel):
+    first_name: str = Field(..., min_length=1, max_length=50, description="User's first name")
+    last_name: str = Field(..., min_length=1, max_length=50, description="User's last name")
+    email: EmailStr = Field(..., description="User's email address")
+    is_oauth_user: bool = Field(default=False, description="Whether user signed up via OAuth")
     password: str = Field(..., min_length=8, max_length=128, description="User's password")
 
 
@@ -120,6 +124,36 @@ class UserResponse(UserBase):
 
 class UserInDB(UserResponse):
     hashed_password: str = Field(..., description="User's hashed password")
+    
+    class Config:
+        # Allow extra fields from MongoDB
+        extra = "allow"
+        
+    @classmethod
+    def from_mongo(cls, data: dict):
+        """Convert MongoDB document to UserInDB"""
+        if data is None:
+            return None
+        
+        # Handle MongoDB _id field
+        if "_id" in data and "id" not in data:
+            data["id"] = str(data["_id"])
+        
+        # Handle legacy current_stage values
+        if "ideas" in data and isinstance(data["ideas"], list):
+            for idea in data["ideas"]:
+                if isinstance(idea, dict) and "current_stage" in idea:
+                    # Map legacy values to new enum values
+                    stage_mapping = {
+                        "idea": "have_an_idea",
+                        "validating": "validating_idea", 
+                        "building": "building_product",
+                        "launching": "ready_to_launch"
+                    }
+                    if idea["current_stage"] in stage_mapping:
+                        idea["current_stage"] = stage_mapping[idea["current_stage"]]
+        
+        return cls(**data)
 
 
 class BusinessIdeaCreate(BaseModel):
