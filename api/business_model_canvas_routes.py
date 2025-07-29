@@ -9,6 +9,7 @@ from core.business_model_canvas_models import (
     CanvasExportRequest, CanvasExportFormat
 )
 from services.auth_service import auth_service
+from services.user_management_service import user_management_service
 from services.analysis_storage_service import analysis_storage_service
 from services.feature_orchestration_service import feature_orchestration_service
 from workflows.simple_business_model_canvas_workflow import simple_business_model_canvas_workflow
@@ -38,7 +39,8 @@ async def generate_business_model_canvas(
     user_email: Optional[str] = Depends(get_current_user_email)
 ):
     """
-    Generate a comprehensive Business Model Canvas using all available analysis context
+    Generate a comprehensive Business Model Canvas using all available analysis context.
+    Requires authentication and idea_id. Extracts all needed information from the idea.
     """
     try:
         print(f"🎨 Starting Business Model Canvas analysis for user: {user_email}")
@@ -51,34 +53,21 @@ async def generate_business_model_canvas(
         user_id = str(user["_id"]) if isinstance(user, dict) else str(user.id)
         idea_id = request.idea_id
         
-        # If no idea_id provided, create a new business idea
-        if not idea_id:
-            from services.user_management_service import user_management_service
-            from core.user_models import BusinessIdeaCreate
-            
-            print(f"🔧 Creating new business idea for user: {user_email}")
-            
-            idea_data = BusinessIdeaCreate(
-                title=f"Business Idea - {request.business_idea[:50]}...",
-                description=request.business_idea,
-                current_stage="have_an_idea",
-                main_goal="validate_if_people_want_idea",
-                biggest_challenge="dont_know_if_anyone_needs_this"
+        # Get the business idea to extract all needed information
+        business_idea = await user_management_service.get_business_idea(user_email, idea_id)
+        if not business_idea:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Business idea not found"
             )
-            
-            new_idea = await user_management_service.create_business_idea(user_email, idea_data)
-            idea_id = new_idea.id
-            print(f"✅ Created new business idea with ID: {idea_id}")
-            print(f"   Idea title: {new_idea.title}")
-            print(f"   Idea description: {new_idea.description[:100]}...")
-        else:
-            print(f"🔧 Using existing idea ID: {idea_id}")
+        
+        print(f"🔧 Using existing idea ID: {idea_id}")
         
         # Run canvas analysis
         canvas = await simple_business_model_canvas_workflow.run_canvas_analysis(
-            business_idea=request.business_idea,
-            target_market=request.target_market,
-            industry=request.industry,
+            business_idea=business_idea.description,
+            target_market=business_idea.target_market or business_idea.target_who or "General market",
+            industry=business_idea.industry or "Technology",
             user_id=user_id,
             idea_id=idea_id
         )

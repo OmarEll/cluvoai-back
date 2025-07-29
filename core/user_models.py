@@ -43,6 +43,16 @@ class BiggestChallenge(str, Enum):
     OVERWHELMED = "feel_overwhelmed_dont_know_where_to_start"
 
 
+class GeographicFocus(str, Enum):
+    NORTH_AMERICA = "north_america"
+    EUROPE = "europe"
+    ASIA = "asia"
+    AFRICA = "africa"
+    SOUTH_AMERICA = "south_america"
+    OCEANIA = "oceania"
+    INTERNATIONAL = "international"
+
+
 class BusinessIdea(BaseModel):
     id: Optional[str] = None
     title: str
@@ -52,13 +62,55 @@ class BusinessIdea(BaseModel):
     biggest_challenge: Optional[str] = None
     # Enhanced fields from onboarding
     business_level: Optional[BusinessLevel] = None
+    geographic_focus: Optional[GeographicFocus] = None
     target_who: Optional[str] = None
     problem_what: Optional[str] = None
     solution_how: Optional[str] = None
+    # Additional fields for analysis
+    target_market: Optional[str] = None
+    industry: Optional[str] = None
     # Feature completion tracking
     completed_analyses: List[str] = Field(default_factory=list)  # ["competitor", "persona", "market_sizing"]
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+    @classmethod
+    def from_mongo(cls, data: dict):
+        """Convert MongoDB document to BusinessIdea with legacy value handling"""
+        if data is None:
+            return None
+        
+        # Handle MongoDB _id field
+        if "_id" in data and "id" not in data:
+            data["id"] = str(data["_id"])
+        
+        # Handle legacy current_stage values
+        if "current_stage" in data:
+            stage_mapping = {
+                "idea": "have_an_idea",
+                "validating": "validating_idea", 
+                "building": "building_product",
+                "launching": "ready_to_launch"
+            }
+            if data["current_stage"] in stage_mapping:
+                data["current_stage"] = stage_mapping[data["current_stage"]]
+        
+        return cls(**data)
+
+    @classmethod
+    def model_validate(cls, obj, *args, **kwargs):
+        """Custom validation to handle legacy values"""
+        if isinstance(obj, dict) and "current_stage" in obj:
+            stage_mapping = {
+                "idea": "have_an_idea",
+                "validating": "validating_idea", 
+                "building": "building_product",
+                "launching": "ready_to_launch"
+            }
+            if obj["current_stage"] in stage_mapping:
+                obj["current_stage"] = stage_mapping[obj["current_stage"]]
+        
+        return super().model_validate(obj, *args, **kwargs)
 
 class BusinessIdeaCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
@@ -67,12 +119,7 @@ class BusinessIdeaCreate(BaseModel):
     main_goal: Optional[str] = None
     biggest_challenge: Optional[str] = None
 
-class BusinessIdeaUpdate(BaseModel):
-    title: Optional[str] = Field(None, min_length=1, max_length=200)
-    description: Optional[str] = Field(None, min_length=10, max_length=2000)
-    current_stage: Optional[CurrentStage] = None
-    main_goal: Optional[str] = None
-    biggest_challenge: Optional[str] = None
+# Remove this duplicate definition
 
 
 class UserBase(BaseModel):
@@ -153,6 +200,17 @@ class UserInDB(UserResponse):
                     if idea["current_stage"] in stage_mapping:
                         idea["current_stage"] = stage_mapping[idea["current_stage"]]
         
+        # Handle legacy current_stage values in the main data
+        if "current_stage" in data:
+            stage_mapping = {
+                "idea": "have_an_idea",
+                "validating": "validating_idea", 
+                "building": "building_product",
+                "launching": "ready_to_launch"
+            }
+            if data["current_stage"] in stage_mapping:
+                data["current_stage"] = stage_mapping[data["current_stage"]]
+        
         return cls(**data)
 
 
@@ -174,6 +232,12 @@ class BusinessIdeaUpdate(BaseModel):
     biggest_challenge: Optional[str] = Field(None, min_length=5, max_length=500, description="Biggest challenge faced")
     target_market: Optional[str] = Field(None, max_length=200, description="Target market description")
     industry: Optional[str] = Field(None, max_length=100, description="Industry vertical")
+    # Enhanced fields from onboarding
+    business_level: Optional[BusinessLevel] = Field(None, description="Business experience level")
+    geographic_focus: Optional[GeographicFocus] = Field(None, description="Target geographic focus")
+    target_who: Optional[str] = Field(None, max_length=200, description="WHO we help")
+    problem_what: Optional[str] = Field(None, max_length=500, description="WHAT problem we solve")
+    solution_how: Optional[str] = Field(None, max_length=500, description="HOW we solve it")
 
 
 class Token(BaseModel):
@@ -198,6 +262,7 @@ class OnboardingQuestionnaire(BaseModel):
     business_idea_description: str = Field(..., description="Business idea in format: We help [WHO] solve [WHAT problem] by [HOW]")
     main_goal: MainGoal
     biggest_challenge: BiggestChallenge
+    geographic_focus: GeographicFocus = Field(..., description="Target geographic focus")
 
 class EnhancedBusinessIdea(BaseModel):
     title: str

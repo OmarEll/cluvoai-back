@@ -7,7 +7,7 @@ from pymongo.errors import DuplicateKeyError
 import re
 from core.user_models import (
     UserUpdate, UserResponse, BusinessIdea, BusinessIdeaCreate, BusinessIdeaUpdate,
-    OnboardingQuestionnaire, BusinessLevel, MainGoal, BiggestChallenge, CurrentStage
+    OnboardingQuestionnaire, BusinessLevel, MainGoal, BiggestChallenge, CurrentStage, GeographicFocus
 )
 from core.database import get_users_collection
 from services.auth_service import auth_service
@@ -134,7 +134,26 @@ class UserManagementService:
                 )
             
             ideas_data = user_doc.get("ideas", [])
-            return [BusinessIdea(**idea) for idea in ideas_data]
+            processed_ideas = []
+            for idea in ideas_data:
+                # Handle legacy current_stage values
+                if "current_stage" in idea:
+                    stage_mapping = {
+                        "idea": "have_an_idea",
+                        "validating": "validating_idea", 
+                        "building": "building_product",
+                        "launching": "ready_to_launch"
+                    }
+                    if idea["current_stage"] in stage_mapping:
+                        idea["current_stage"] = stage_mapping[idea["current_stage"]]
+                
+                # Handle MongoDB _id field
+                if "_id" in idea and "id" not in idea:
+                    idea["id"] = str(idea["_id"])
+                
+                processed_ideas.append(BusinessIdea(**idea))
+            
+            return processed_ideas
             
         except HTTPException:
             raise
@@ -159,6 +178,22 @@ class UserManagementService:
                 )
             
             idea_data = user_doc["ideas"][0]
+            
+            # Handle legacy current_stage values
+            if "current_stage" in idea_data:
+                stage_mapping = {
+                    "idea": "have_an_idea",
+                    "validating": "validating_idea", 
+                    "building": "building_product",
+                    "launching": "ready_to_launch"
+                }
+                if idea_data["current_stage"] in stage_mapping:
+                    idea_data["current_stage"] = stage_mapping[idea_data["current_stage"]]
+            
+            # Handle MongoDB _id field
+            if "_id" in idea_data and "id" not in idea_data:
+                idea_data["id"] = str(idea_data["_id"])
+            
             return BusinessIdea(**idea_data)
             
         except HTTPException:
@@ -168,6 +203,39 @@ class UserManagementService:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Error fetching business idea: {str(e)}"
             )
+    
+    async def get_business_idea_by_id(self, idea_id: str) -> Optional[BusinessIdea]:
+        """Get a business idea by ID without user validation (for internal use)"""
+        try:
+            # Search across all users for the idea
+            users = self.users_collection().find({"ideas.id": idea_id})
+            
+            async for user in users:
+                if "ideas" in user:
+                    for idea_data in user["ideas"]:
+                        if idea_data.get("id") == idea_id:
+                            # Handle legacy current_stage values
+                            if "current_stage" in idea_data:
+                                stage_mapping = {
+                                    "idea": "have_an_idea",
+                                    "validating": "validating_idea", 
+                                    "building": "building_product",
+                                    "launching": "ready_to_launch"
+                                }
+                                if idea_data["current_stage"] in stage_mapping:
+                                    idea_data["current_stage"] = stage_mapping[idea_data["current_stage"]]
+                            
+                            # Handle MongoDB _id field
+                            if "_id" in idea_data and "id" not in idea_data:
+                                idea_data["id"] = str(idea_data["_id"])
+                            
+                            return BusinessIdea(**idea_data)
+            
+            return None
+            
+        except Exception as e:
+            print(f"Error retrieving business idea by ID: {str(e)}")
+            return None
     
     async def update_business_idea(self, user_email: str, idea_id: str, idea_update: BusinessIdeaUpdate) -> BusinessIdea:
         """Update a business idea"""
@@ -189,6 +257,17 @@ class UserManagementService:
                 update_data["ideas.$.target_market"] = idea_update.target_market
             if idea_update.industry is not None:
                 update_data["ideas.$.industry"] = idea_update.industry
+            # Add support for enhanced fields
+            if idea_update.business_level is not None:
+                update_data["ideas.$.business_level"] = idea_update.business_level
+            if idea_update.geographic_focus is not None:
+                update_data["ideas.$.geographic_focus"] = idea_update.geographic_focus
+            if idea_update.target_who is not None:
+                update_data["ideas.$.target_who"] = idea_update.target_who
+            if idea_update.problem_what is not None:
+                update_data["ideas.$.problem_what"] = idea_update.problem_what
+            if idea_update.solution_how is not None:
+                update_data["ideas.$.solution_how"] = idea_update.solution_how
             
             # Update the idea
             result = await self.users_collection().update_one(
@@ -279,6 +358,7 @@ class UserManagementService:
             enhanced_idea_dict = created_idea.dict()
             enhanced_idea_dict.update({
                 "business_level": questionnaire.business_level.value,
+                "geographic_focus": questionnaire.geographic_focus.value,
                 "target_who": parsed_components.get("who"),
                 "problem_what": parsed_components.get("what"),
                 "solution_how": parsed_components.get("how"),

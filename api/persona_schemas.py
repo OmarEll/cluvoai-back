@@ -7,34 +7,9 @@ class PersonaAnalysisRequest(BaseModel):
     """
     Request schema for persona analysis
     """
-    business_idea: str = Field(
-        ..., 
-        description="Description of the business idea or product",
-        example="AI-powered fitness app that creates personalized workout plans"
-    )
-    target_market: Optional[str] = Field(
-        None,
-        description="Target market or customer segment", 
-        example="Fitness enthusiasts aged 25-45 who work out at home"
-    )
-    industry: Optional[str] = Field(
-        None,
-        description="Industry vertical",
-        example="Health and Fitness Technology"
-    )
-    geographic_focus: Optional[str] = Field(
-        None,
-        description="Target geographic markets",
-        example="North America and Europe"
-    )
-    product_category: Optional[str] = Field(
-        None,
-        description="Product category or type",
-        example="Mobile App"
-    )
-    idea_id: Optional[str] = Field(
-        None,
-        description="Business idea ID (for authenticated users to save results)",
+    idea_id: str = Field(
+        ...,
+        description="Business idea ID to analyze",
         example="550e8400-e29b-41d4-a716-446655440000"
     )
 

@@ -9,27 +9,7 @@ from core.market_models import (
 
 class MarketSizingRequest(BaseModel):
     """Request model for market sizing analysis"""
-    business_idea: str = Field(..., description="Detailed business idea description")
-    industry: str = Field(..., description="Primary industry or sector")
-    target_market: str = Field(..., description="Target market description")
-    geographic_scope: GeographicScope = Field(
-        default=GeographicScope.USA,
-        description="Geographic scope for market analysis"
-    )
-    custom_geography: Optional[List[str]] = Field(
-        None,
-        description="Custom geographic regions if scope is CUSTOM"
-    )
-    customer_type: CustomerType = Field(..., description="Target customer type")
-    revenue_model: RevenueModel = Field(..., description="Primary revenue model")
-    estimated_price_point: Optional[float] = Field(
-        None,
-        description="Estimated price per unit/subscription"
-    )
-    idea_id: Optional[str] = Field(
-        None,
-        description="Business idea ID for authenticated users to save results"
-    )
+    idea_id: str = Field(..., description="Business idea ID to analyze", example="550e8400-e29b-41d4-a716-446655440000")
 
 
 class MarketSizingResponse(BaseModel):

@@ -8,6 +8,7 @@ from core.business_model_models import (
 )
 from core.analysis_models import AnalysisType
 from services.auth_service import auth_service
+from services.user_management_service import user_management_service
 from services.analysis_storage_service import analysis_storage_service
 from workflows.business_model_workflow import business_model_workflow
 from api.auth_routes import security
@@ -27,7 +28,8 @@ async def analyze_business_model(
     user_email: str = Depends(get_current_user_email)
 ):
     """
-    Generate comprehensive business model analysis with intelligent context from previous analyses
+    Generate comprehensive business model analysis with intelligent context from previous analyses.
+    Requires authentication and idea_id. Extracts all needed information from the idea.
     
     This endpoint leverages:
     - Competitive analysis for pricing intelligence and market positioning
@@ -37,14 +39,22 @@ async def analyze_business_model(
     try:
         print(f"🚀 Starting business model analysis for user: {user_email}")
         
-        # Create business model input
+        # Get the business idea to extract all needed information
+        business_idea = await user_management_service.get_business_idea(user_email, request.idea_id)
+        if not business_idea:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Business idea not found"
+            )
+        
+        # Create business model input from the business idea
         business_input = BusinessModelInput(
-            business_idea=request.business_idea,
-            target_market=request.target_market,
-            industry=request.industry,
-            estimated_users=request.estimated_users,
-            development_cost=request.development_cost,
-            operational_cost_monthly=request.operational_cost_monthly,
+            business_idea=business_idea.description,
+            target_market=business_idea.target_market or business_idea.target_who or "General market",
+            industry=business_idea.industry or "Technology",
+            estimated_users=None,  # Can be enhanced later
+            development_cost=None,  # Can be enhanced later
+            operational_cost_monthly=None,  # Can be enhanced later
             idea_id=request.idea_id,
             user_id=user_email
         )

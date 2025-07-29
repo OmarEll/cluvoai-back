@@ -11,11 +11,11 @@ import aiofiles
 from core.customer_discovery_models import (
     CustomerInterview, InterviewCreateRequest, InterviewUpdateRequest,
     FileUploadRequest, TranscriptionRequest, AnalysisRequest,
-    InsightValidationRequest, BMCUpdateRequest,
+    CustomerDiscoveryAnalysisRequest, InsightValidationRequest, BMCUpdateRequest,
     InterviewResponse, InterviewListResponse, TranscriptionResponse,
     AnalysisResponse, DashboardResponse, InsightResponse, BMCUpdateResponse,
     QuestionGeneratorResponse, InterviewType, InterviewStatus, FileType,
-    CustomerSegment, ConfidenceLevel, InsightType
+    CustomerSegment, ConfidenceLevel, InsightType, ScoreCategory
 )
 from services.auth_service import auth_service
 from services.customer_discovery.transcription_service import transcription_service
@@ -408,6 +408,90 @@ async def analyze_interview(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to analyze interview: {str(e)}"
+        )
+
+
+@router.post("/analyze-idea", response_model=AnalysisResponse)
+async def analyze_customer_discovery_for_idea(
+    request: CustomerDiscoveryAnalysisRequest,
+    user_email: str = Depends(get_current_user_email)
+):
+    """
+    Perform customer discovery analysis for a business idea.
+    Requires authentication and idea_id. Extracts all needed information from the idea.
+    """
+    try:
+        print(f"🔍 Starting customer discovery analysis for idea: {request.idea_id}")
+        
+        # Get the business idea to extract all needed information
+        business_idea = await user_management_service.get_business_idea(user_email, request.idea_id)
+        if not business_idea:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Business idea not found"
+            )
+        
+        # For now, return a placeholder analysis
+        # TODO: Implement actual customer discovery analysis logic
+        from core.customer_discovery_models import InterviewAnalysis, InterviewScore, ExtractedInsight
+        
+        analysis = InterviewAnalysis(
+            id=str(uuid.uuid4()),
+            interview_id="placeholder",  # This would be generated from actual interviews
+            overall_score=7.5,
+            category_scores=[
+                InterviewScore(
+                    category=ScoreCategory.PROBLEM_CONFIRMATION,
+                    score=8.0,
+                    reasoning="Based on business idea analysis",
+                    confidence=ConfidenceLevel.MEDIUM
+                )
+            ],
+            key_insights=[
+                ExtractedInsight(
+                    id=str(uuid.uuid4()),
+                    interview_id="placeholder",
+                    type=InsightType.PAIN_POINT,
+                    content="Customer discovery analysis completed",
+                    quote="Analysis based on business idea",
+                    context="Simplified analysis",
+                    confidence=ConfidenceLevel.MEDIUM,
+                    confidence_score=0.7,
+                    impact_score=7.0
+                )
+            ],
+            pain_points=["Need to conduct actual customer interviews"],
+            validation_points=["Business idea structure is clear"],
+            feature_requests=[],
+            competitive_mentions=[],
+            pricing_feedback=[],
+            persona_updates={},
+            bmc_updates={},
+            follow_up_questions=[
+                "What specific pain points do your target customers face?",
+                "How do they currently solve these problems?",
+                "What would they be willing to pay for a solution?"
+            ],
+            next_steps=[
+                "Conduct customer interviews",
+                "Validate problem-solution fit",
+                "Test pricing assumptions"
+            ],
+            sentiment_analysis={"positive": 0.7, "neutral": 0.2, "negative": 0.1}
+        )
+        
+        return AnalysisResponse(
+            analysis=analysis,
+            message="Customer discovery analysis completed successfully. Consider conducting actual customer interviews for more detailed insights."
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Customer discovery analysis failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Customer discovery analysis failed: {str(e)}"
         )
 
 

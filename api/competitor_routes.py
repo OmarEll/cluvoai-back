@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.responses import JSONResponse
 from typing import Dict, Any, Optional
@@ -38,22 +38,36 @@ async def get_current_user_optional(credentials: Optional[HTTPAuthorizationCrede
 @router.post("/analyze/competitors", response_model=CompetitorAnalysisResponse)
 async def analyze_competitors(
     request: CompetitorAnalysisRequest,
-    user_email: Optional[str] = Depends(get_current_user_optional)
+    user_email: str = Depends(get_current_user_optional)
 ):
     """
     Start competitor analysis for a business idea.
-    If user is authenticated, results will be automatically saved to their account.
+    Requires authentication and idea_id. Extracts all needed information from the idea.
     """
     try:
+        if not user_email:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required"
+            )
+        
         start_time = time.time()
         
-        # Create business input from request
+        # Get the business idea to extract all needed information
+        business_idea = await user_management_service.get_business_idea(user_email, request.idea_id)
+        if not business_idea:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Business idea not found"
+            )
+        
+        # Create business input from the idea data
         business_input = BusinessInput(
-            idea_description=request.idea_description,
-            target_market=request.target_market,
-            business_model=request.business_model,
-            geographic_focus=request.geographic_focus,
-            industry=request.industry
+            idea_description=business_idea.description,
+            target_market=business_idea.target_who or business_idea.target_market or "General market",
+            business_model=None,  # Will be inferred from description
+            geographic_focus=business_idea.geographic_focus.value if business_idea.geographic_focus else "international",
+            industry=business_idea.industry or "Technology"
         )
         
         # Initialize workflow
@@ -63,48 +77,19 @@ async def analyze_competitors(
         report = await workflow.run_analysis(business_input)
         execution_time = time.time() - start_time
         
-        # If user is authenticated, save the results
-        if user_email:
-            try:
-                # Get user
-                user = await auth_service.get_user_by_email(user_email)
-                if user:
-                    idea_id = request.idea_id
-                    
-                    # If no idea_id provided, create a temporary idea
-                    if not idea_id:
-                        temp_idea = await user_management_service.create_business_idea(
-                            user_email,
-                            BusinessIdeaCreate(
-                                title=f"Analysis from {datetime.now().strftime('%Y-%m-%d %H:%M')}",
-                                description=request.idea_description,
-                                current_stage=CurrentStage.IDEA,
-                                main_goal="Generated from competitor analysis",
-                                biggest_challenge="To be defined",
-                                target_market=request.target_market,
-                                industry=request.industry
-                            )
-                        )
-                        idea_id = temp_idea.id
-                    else:
-                        # Verify the idea belongs to the user
-                        await user_management_service.get_business_idea(user_email, idea_id)
-                    
-                    # Save analysis results
-                    await analysis_storage_service.save_analysis_result(
-                        user_id=user.id,
-                        idea_id=idea_id,
-                        analysis_type=AnalysisType.COMPETITOR,
-                        competitor_report=report,
-                        execution_time=execution_time
-                    )
-                    
-                    message = f"Competitor analysis completed and saved to your account{'!' if request.idea_id else ' (new idea created)!'}"
-                else:
-                    message = "Competitor analysis completed successfully"
-            except Exception as save_error:
-                print(f"Failed to save analysis for user {user_email}: {save_error}")
-                message = "Competitor analysis completed successfully (saving failed)"
+        # Get user and save the results
+        user = await auth_service.get_user_by_email(user_email)
+        if user:
+            # Save analysis results
+            await analysis_storage_service.save_analysis_result(
+                user_id=user.id,
+                idea_id=request.idea_id,
+                analysis_type=AnalysisType.COMPETITOR,
+                competitor_report=report,
+                execution_time=execution_time
+            )
+            
+            message = "Competitor analysis completed and saved to your account!"
         else:
             message = "Competitor analysis completed successfully"
         
@@ -137,11 +122,29 @@ async def analyze_competitors(
 
 
 @router.post("/analyze/competitors/async")
-async def analyze_competitors_async(request: CompetitorAnalysisRequest, background_tasks: BackgroundTasks):
+async def analyze_competitors_async(
+    request: CompetitorAnalysisRequest, 
+    background_tasks: BackgroundTasks,
+    user_email: str = Depends(get_current_user_optional)
+):
     """
     Start async competitor analysis (for long-running analyses)
     """
     try:
+        if not user_email:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required"
+            )
+        
+        # Verify the idea belongs to the user
+        business_idea = await user_management_service.get_business_idea(user_email, request.idea_id)
+        if not business_idea:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Business idea not found"
+            )
+        
         # Generate unique analysis ID
         analysis_id = str(uuid.uuid4())
         
@@ -151,14 +154,17 @@ async def analyze_competitors_async(request: CompetitorAnalysisRequest, backgrou
             "started_at": datetime.utcnow().isoformat(),
             "progress": 0,
             "report": None,
-            "error": None
+            "error": None,
+            "user_email": user_email,
+            "idea_id": request.idea_id
         }
         
         # Add background task
         background_tasks.add_task(
             run_async_analysis, 
             analysis_id, 
-            request
+            request,
+            user_email
         )
         
         return JSONResponse(
@@ -216,6 +222,65 @@ async def get_analysis_status(analysis_id: str):
         )
 
 
+@router.get("/analyze/last-analysis/{idea_id}")
+async def get_last_competitor_analysis(
+    idea_id: str,
+    user_email: str = Depends(get_current_user_optional)
+):
+    """
+    Get the last competitor analysis for a specific business idea
+    """
+    try:
+        if not user_email:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required"
+            )
+        
+        # Get user
+        user = await auth_service.get_user_by_email(user_email)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        
+        # Simple search in saved_analyses collection for the given idea_id
+        from core.database import get_saved_analyses_collection
+        
+        # Direct query based on test results
+        analysis_doc = await get_saved_analyses_collection().find_one(
+            {
+                "idea_id": idea_id,
+                "analysis_type": "competitor"
+            },
+            sort=[("created_at", -1)]  # Get the most recent
+        )
+        
+        if not analysis_doc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No competitor analysis found for this idea"
+            )
+        
+        return {
+            "status": "found",
+            "analysis_id": analysis_doc.get("id"),
+            "report": analysis_doc.get("competitor_report"),
+            "created_at": analysis_doc.get("created_at"),
+            "execution_time": analysis_doc.get("execution_time"),
+            "message": "Last competitor analysis retrieved successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error retrieving last analysis: {str(e)}"
+        )
+
+
 @router.get("/health")
 async def health_check():
     """
@@ -224,7 +289,7 @@ async def health_check():
     return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
 
 
-async def run_async_analysis(analysis_id: str, request: CompetitorAnalysisRequest):
+async def run_async_analysis(analysis_id: str, request: CompetitorAnalysisRequest, user_email: str):
     """
     Background task to run competitor analysis
     """
@@ -232,13 +297,16 @@ async def run_async_analysis(analysis_id: str, request: CompetitorAnalysisReques
         # Update progress
         analysis_results[analysis_id]["progress"] = 10
         
-        # Create business input
+        # Get the business idea to extract all needed information
+        business_idea = await user_management_service.get_business_idea(user_email, request.idea_id)
+        
+        # Create business input from the idea data
         business_input = BusinessInput(
-            idea_description=request.idea_description,
-            target_market=request.target_market,
-            business_model=request.business_model,
-            geographic_focus=request.geographic_focus,
-            industry=request.industry
+            idea_description=business_idea.description,
+            target_market=business_idea.target_who or business_idea.target_market or "General market",
+            business_model=None,  # Will be inferred from description
+            geographic_focus=business_idea.geographic_focus.value if business_idea.geographic_focus else "international",
+            industry=business_idea.industry or "Technology"
         )
         
         # Update progress
@@ -262,6 +330,20 @@ async def run_async_analysis(analysis_id: str, request: CompetitorAnalysisReques
             "report": report,
             "completed_at": datetime.utcnow().isoformat()
         })
+        
+        # Save results to database if user is authenticated
+        try:
+            user = await auth_service.get_user_by_email(user_email)
+            if user:
+                await analysis_storage_service.save_analysis_result(
+                    user_id=user.id,
+                    idea_id=request.idea_id,
+                    analysis_type=AnalysisType.COMPETITOR,
+                    competitor_report=report,
+                    execution_time=time.time() - time.time()  # Approximate
+                )
+        except Exception as save_error:
+            print(f"Failed to save analysis results: {save_error}")
         
     except Exception as e:
         # Store error

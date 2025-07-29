@@ -204,11 +204,7 @@ class BusinessModelCanvas(BaseModel):
 
 # API Request/Response models
 class BusinessModelCanvasRequest(BaseModel):
-    business_idea: str
-    target_market: str
-    industry: str
-    idea_id: Optional[str] = None
-    user_id: Optional[str] = None
+    idea_id: str = Field(..., description="Business idea ID to analyze", example="550e8400-e29b-41d4-a716-446655440000")
 
 
 class BusinessModelCanvasResponse(BaseModel):

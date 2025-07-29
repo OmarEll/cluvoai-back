@@ -7,34 +7,9 @@ class CompetitorAnalysisRequest(BaseModel):
     """
     Request schema for competitor analysis
     """
-    idea_description: str = Field(
-        ..., 
-        description="Description of the business idea",
-        example="AI-powered HR recruitment tool for small businesses"
-    )
-    target_market: Optional[str] = Field(
-        None,
-        description="Target market or customer segment", 
-        example="Small to medium businesses with 10-100 employees"
-    )
-    business_model: Optional[str] = Field(
-        None,
-        description="Business/revenue model",
-        example="SaaS subscription model with freemium tier"
-    )
-    geographic_focus: Optional[str] = Field(
-        None,
-        description="Target geographic markets",
-        example="North America and Europe"
-    )
-    industry: Optional[str] = Field(
-        None,
-        description="Industry vertical",
-        example="Human Resources Technology"
-    )
-    idea_id: Optional[str] = Field(
-        None,
-        description="Business idea ID (for authenticated users to save results)",
+    idea_id: str = Field(
+        ...,
+        description="Business idea ID to analyze",
         example="550e8400-e29b-41d4-a716-446655440000"
     )
 

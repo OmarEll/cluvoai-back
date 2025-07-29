@@ -1,4 +1,5 @@
 import asyncio
+import os
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from pymongo.errors import ServerSelectionTimeoutError
 from pymongo.server_api import ServerApi
@@ -16,14 +17,25 @@ db = MongoDB()
 async def connect_to_mongo():
     """Create database connection"""
     try:
-        # Build MongoDB connection string
-        if settings.mongo_user and settings.mongo_pwd:
-            # Use the MONGO_HOST from settings instead of hardcoded cluster
-            connection_string = f"mongodb+srv://{settings.mongo_user}:{settings.mongo_pwd}@{settings.mongo_host}/?retryWrites=true&w=majority"
-        else:
-            raise ValueError("MongoDB credentials are required. Please set MONGO_USER and MONGO_PWD in your .env file.")
+        # Temporarily disable MongoDB connection until network access is fixed
+        print("🔌 MongoDB connection temporarily disabled for testing")
+        print("⚠️ Please add your IP address to MongoDB Atlas Network Access whitelist")
+        print("💡 The chat API will work with limited functionality")
+        return
         
-        print(f"🔌 Connecting to MongoDB at {settings.mongo_host}...")
+        # Check for Railway MongoDB connection string first
+        railway_mongo_url = os.environ.get("MONGODB_URL")
+        
+        if railway_mongo_url:
+            # Use Railway's MongoDB connection string
+            print("🔌 Connecting to Railway MongoDB...")
+            connection_string = railway_mongo_url
+        elif settings.mongo_user and settings.mongo_pwd:
+            # Use the new MongoDB Atlas format with appName
+            connection_string = f"mongodb+srv://{settings.mongo_user}:{settings.mongo_pwd}@{settings.mongo_host}/?retryWrites=true&w=majority&appName=Cluster0"
+            print(f"🔌 Connecting to MongoDB at {settings.mongo_host}...")
+        else:
+            raise ValueError("MongoDB credentials are required. Please set MONGO_USER and MONGO_PWD in your .env file or MONGODB_URL for Railway.")
         
         # Create the client with minimal configuration
         db.client = AsyncIOMotorClient(

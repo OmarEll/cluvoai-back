@@ -16,6 +16,7 @@ from api.onboarding_routes import router as onboarding_router
 from api.business_model_routes import router as business_model_router
 from api.business_model_canvas_routes import router as business_model_canvas_router
 from api.customer_discovery_routes import router as customer_discovery_router
+from api.chat_routes import router as chat_router
 from core.database import connect_to_mongo, close_mongo_connection, db
 from config.settings import settings
 
@@ -52,6 +53,7 @@ async def lifespan(app: FastAPI):
     print("✅ Business Model API ready")
     print("✅ Business Model Canvas API ready")
     print("✅ Customer Discovery API ready")
+    print("✅ Chat API ready")
     print("✅ Authentication API ready")
     print("✅ API ready to serve requests")
     
@@ -93,6 +95,7 @@ app.include_router(onboarding_router, prefix="/api/v1", tags=["User Onboarding"]
 app.include_router(business_model_router, prefix="/api/v1", tags=["Business Model Analysis"])
 app.include_router(business_model_canvas_router, prefix="/api/v1", tags=["Business Model Canvas"])
 app.include_router(customer_discovery_router, prefix="/api/v1", tags=["Customer Discovery"])
+app.include_router(chat_router, prefix="/api/v1", tags=["Business Idea Chat"])
 
 
 @app.get("/")
@@ -104,8 +107,24 @@ async def root():
         "service": "Cluvo.ai AI Business Intelligence API",
         "version": "1.0.0",
         "status": "healthy",
-        "database": "connected" if db.database else "disconnected"
+        "database": "connected" if db.database is not None else "disconnected",
+        "timestamp": "2024-01-01T00:00:00Z"
     }
+
+@app.get("/health")
+async def health_check():
+    """
+    Simple health check endpoint for Railway
+    """
+    return {"status": "ok"}
+
+
+@app.get("/api/v1/features")
+async def get_features():
+    """
+    List all available features
+    """
+    return {
         "status": "operational",
         "features": [
             "AI-powered competitor analysis",
@@ -239,10 +258,15 @@ if __name__ == "__main__":
     # Get port from environment variable (Railway sets PORT)
     port = int(os.environ.get("PORT", 8000))
     
+    print(f"🚀 Starting Cluvo.ai API on port {port}")
+    print(f"🌍 Environment: {os.environ.get('RAILWAY_ENVIRONMENT', 'development')}")
+    print(f"🔗 Host: 0.0.0.0")
+    
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
         port=port,
         reload=False,  # Disable reload in production
-        log_level="info"
+        log_level="info",
+        access_log=True
     )

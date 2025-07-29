@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.responses import JSONResponse
 from typing import Dict, Any, Optional
@@ -38,22 +38,36 @@ async def get_current_user_optional(credentials: Optional[HTTPAuthorizationCrede
 @router.post("/analyze/personas", response_model=PersonaAnalysisResponse)
 async def analyze_personas(
     request: PersonaAnalysisRequest,
-    user_email: Optional[str] = Depends(get_current_user_optional)
+    user_email: str = Depends(get_current_user_optional)
 ):
     """
     Analyze target personas for a business idea using social media insights.
-    If user is authenticated, results will be automatically saved to their account.
+    Requires authentication and idea_id. Extracts all needed information from the idea.
     """
     try:
+        if not user_email:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required"
+            )
+        
         start_time = time.time()
         
-        # Create analysis input from request
+        # Get the business idea to extract all needed information
+        business_idea = await user_management_service.get_business_idea(user_email, request.idea_id)
+        if not business_idea:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Business idea not found"
+            )
+        
+        # Create analysis input from the business idea data
         analysis_input = PersonaAnalysisInput(
-            business_idea=request.business_idea,
-            target_market=request.target_market,
-            industry=request.industry,
-            geographic_focus=request.geographic_focus,
-            product_category=request.product_category
+            business_idea=business_idea.description,
+            target_market=business_idea.target_who or business_idea.target_market or "General market",
+            industry=business_idea.industry or "Technology",
+            geographic_focus=business_idea.geographic_focus.value if business_idea.geographic_focus else "international",
+            product_category="Mobile App"  # Default category
         )
         
         # Initialize workflow
@@ -63,45 +77,19 @@ async def analyze_personas(
         report = await workflow.run_analysis(analysis_input)
         execution_time = time.time() - start_time
         
-        # If user is authenticated, save the results
-        if user_email:
+        # Get user and save the results
+        user = await auth_service.get_user_by_email(user_email)
+        if user:
             try:
-                # Get user
-                user = await auth_service.get_user_by_email(user_email)
-                if user:
-                    idea_id = request.idea_id
-                    
-                    # If no idea_id provided, create a temporary idea
-                    if not idea_id:
-                        temp_idea = await user_management_service.create_business_idea(
-                            user_email,
-                            BusinessIdeaCreate(
-                                title=f"Analysis from {datetime.now().strftime('%Y-%m-%d %H:%M')}",
-                                description=request.business_idea,
-                                current_stage=CurrentStage.IDEA,
-                                main_goal="Generated from persona analysis",
-                                biggest_challenge="To be defined",
-                                target_market=request.target_market,
-                                industry=request.industry
-                            )
-                        )
-                        idea_id = temp_idea.id
-                    else:
-                        # Verify the idea belongs to the user
-                        await user_management_service.get_business_idea(user_email, idea_id)
-                    
-                    # Save analysis results
-                    await analysis_storage_service.save_analysis_result(
-                        user_id=user.id,
-                        idea_id=idea_id,
-                        analysis_type=AnalysisType.PERSONA,
-                        persona_report=report,
-                        execution_time=execution_time
-                    )
-                    
-                    message = f"Persona analysis completed and saved to your account{'!' if request.idea_id else ' (new idea created)!'}"
-                else:
-                    message = "Persona analysis completed successfully"
+                # Save analysis results
+                await analysis_storage_service.save_analysis_result(
+                    user_id=user.id,
+                    idea_id=request.idea_id,
+                    analysis_type=AnalysisType.PERSONA,
+                    persona_report=report,
+                    execution_time=execution_time
+                )
+                message = "Persona analysis completed and saved to your account!"
             except Exception as save_error:
                 print(f"Failed to save analysis for user {user_email}: {save_error}")
                 message = "Persona analysis completed successfully (saving failed)"
@@ -120,7 +108,7 @@ async def analyze_personas(
             try:
                 # Get the most recent analysis for this idea to get the analysis_id
                 recent_analysis = await analysis_storage_service.get_user_analysis(
-                    user.id, idea_id if 'idea_id' in locals() else None, AnalysisType.PERSONA, include_feedback=False
+                    user.id, request.idea_id, AnalysisType.PERSONA, include_feedback=False
                 )
                 if recent_analysis and recent_analysis.id:
                     response_data["analysis_id"] = recent_analysis.id
@@ -137,11 +125,29 @@ async def analyze_personas(
 
 
 @router.post("/analyze/personas/async")
-async def analyze_personas_async(request: PersonaAnalysisRequest, background_tasks: BackgroundTasks):
+async def analyze_personas_async(
+    request: PersonaAnalysisRequest, 
+    background_tasks: BackgroundTasks,
+    user_email: str = Depends(get_current_user_optional)
+):
     """
     Start async persona analysis (for long-running analyses)
     """
     try:
+        if not user_email:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required"
+            )
+        
+        # Verify the idea belongs to the user
+        business_idea = await user_management_service.get_business_idea(user_email, request.idea_id)
+        if not business_idea:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Business idea not found"
+            )
+        
         # Generate unique analysis ID
         analysis_id = str(uuid.uuid4())
         
@@ -151,14 +157,17 @@ async def analyze_personas_async(request: PersonaAnalysisRequest, background_tas
             "started_at": datetime.utcnow().isoformat(),
             "progress": 0,
             "report": None,
-            "error": None
+            "error": None,
+            "user_email": user_email,
+            "idea_id": request.idea_id
         }
         
         # Add background task
         background_tasks.add_task(
-            run_async_persona_analysis,
-            analysis_id,
-            request
+            run_async_persona_analysis, 
+            analysis_id, 
+            request,
+            user_email
         )
         
         return JSONResponse(
@@ -243,7 +252,7 @@ async def get_example_personas():
     }
 
 
-async def run_async_persona_analysis(analysis_id: str, request: PersonaAnalysisRequest):
+async def run_async_persona_analysis(analysis_id: str, request: PersonaAnalysisRequest, user_email: str):
     """
     Background task to run persona analysis
     """
@@ -251,13 +260,16 @@ async def run_async_persona_analysis(analysis_id: str, request: PersonaAnalysisR
         # Update progress
         persona_analysis_results[analysis_id]["progress"] = 10
         
-        # Create analysis input
+        # Get the business idea to extract all needed information
+        business_idea = await user_management_service.get_business_idea(user_email, request.idea_id)
+        
+        # Create analysis input from the business idea data
         analysis_input = PersonaAnalysisInput(
-            business_idea=request.business_idea,
-            target_market=request.target_market,
-            industry=request.industry,
-            geographic_focus=request.geographic_focus,
-            product_category=request.product_category
+            business_idea=business_idea.description,
+            target_market=business_idea.target_who or business_idea.target_market or "General market",
+            industry=business_idea.industry or "Technology",
+            geographic_focus=business_idea.geographic_focus.value if business_idea.geographic_focus else "international",
+            product_category="Mobile App"  # Default category
         )
         
         # Update progress
@@ -275,6 +287,20 @@ async def run_async_persona_analysis(analysis_id: str, request: PersonaAnalysisR
         # Update progress
         persona_analysis_results[analysis_id]["progress"] = 100
         
+        # Get user and save the results
+        user = await auth_service.get_user_by_email(user_email)
+        if user:
+            try:
+                await analysis_storage_service.save_analysis_result(
+                    user_id=user.id,
+                    idea_id=request.idea_id,
+                    analysis_type=AnalysisType.PERSONA,
+                    persona_report=report,
+                    execution_time=0.0  # Will be calculated
+                )
+            except Exception as save_error:
+                print(f"Failed to save async analysis for user {user_email}: {save_error}")
+        
         # Store results
         persona_analysis_results[analysis_id].update({
             "status": "completed",
@@ -289,3 +315,63 @@ async def run_async_persona_analysis(analysis_id: str, request: PersonaAnalysisR
             "error": str(e),
             "failed_at": datetime.utcnow().isoformat()
         })
+
+
+@router.get("/analyze/last-persona-analysis/{idea_id}")
+async def get_last_persona_analysis(idea_id: str, user_email: str = Depends(get_current_user_optional)):
+    """
+    Get the last persona analysis performed for a specific idea_id.
+    This is just a search in saved_analyses table with the field idea_id, do not generate a new persona analysis.
+    """
+    try:
+        if not user_email:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required"
+            )
+        
+        # Get user
+        user = await auth_service.get_user_by_email(user_email)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        
+        # Get the most recent persona analysis for this idea
+        from core.database import get_saved_analyses_collection
+        
+        analysis_doc = await get_saved_analyses_collection().find_one(
+            {
+                "idea_id": idea_id,
+                "analysis_type": "persona"
+            },
+            sort=[("created_at", -1)]  # Get the most recent
+        )
+        
+        if not analysis_doc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No persona analysis found for this idea"
+            )
+        
+        return {
+            "analysis_id": analysis_doc.get("id"),
+            "idea_id": idea_id,
+            "analysis_type": "persona",
+            "status": analysis_doc.get("status", "completed"),
+            "report": analysis_doc.get("persona_report"),
+            "created_at": analysis_doc.get("created_at"),
+            "completed_at": analysis_doc.get("completed_at"),
+            "execution_time": analysis_doc.get("execution_time"),
+            "message": "Last persona analysis retrieved successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error retrieving last persona analysis: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve last persona analysis: {str(e)}"
+        )

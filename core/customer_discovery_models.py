@@ -261,6 +261,11 @@ class AnalysisRequest(BaseModel):
     force_reanalysis: bool = False
 
 
+class CustomerDiscoveryAnalysisRequest(BaseModel):
+    """Simplified request for customer discovery analysis"""
+    idea_id: str = Field(..., description="Business idea ID to analyze", example="550e8400-e29b-41d4-a716-446655440000")
+
+
 class InsightValidationRequest(BaseModel):
     insight_id: str
     validation_status: str  # validated, rejected

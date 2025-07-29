@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     # MongoDB Configuration
     mongo_user: str = ""
     mongo_pwd: str = ""
-    mongo_host: str = "cluster0.wj29w.mongodb.net"
+    mongo_host: str = "cluster0.cpe8ojr.mongodb.net"
     mongo_database: str = "cluvoai"
     
     # JWT Configuration
@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     google_redirect_uri: str = "http://localhost:8000/api/v1/auth/oauth/google/callback"
 
     # LLM Configuration
-    llm_model: str = "gpt-4o-mini"
+    llm_model: str = "gpt-3.5-turbo"  # Fallback to more reliable model
     llm_temperature: float = 0.3
     max_tokens: int = 2000
     

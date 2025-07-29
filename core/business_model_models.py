@@ -126,13 +126,7 @@ class BusinessModelState(BaseModel):
 
 # API Request/Response models
 class BusinessModelRequest(BaseModel):
-    business_idea: str
-    target_market: str
-    industry: str
-    estimated_users: Optional[int] = None
-    development_cost: Optional[float] = None
-    operational_cost_monthly: Optional[float] = None
-    idea_id: Optional[str] = None
+    idea_id: str = Field(..., description="Business idea ID to analyze", example="550e8400-e29b-41d4-a716-446655440000")
 
 
 class BusinessModelResponse(BaseModel):

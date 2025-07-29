@@ -4,7 +4,7 @@ from typing import List, Dict
 
 from core.user_models import (
     OnboardingRequest, OnboardingResponse, OnboardingQuestionnaire,
-    BusinessLevel, CurrentStage, MainGoal, BiggestChallenge
+    BusinessLevel, CurrentStage, MainGoal, BiggestChallenge, GeographicFocus
 )
 from services.auth_service import auth_service
 from services.user_management_service import user_management_service
@@ -76,6 +76,10 @@ async def get_onboarding_options():
         "biggest_challenges": [
             {"value": challenge.value, "label": _get_biggest_challenge_label(challenge)} 
             for challenge in BiggestChallenge
+        ],
+        "geographic_focus": [
+            {"value": focus.value, "label": _get_geographic_focus_label(focus)} 
+            for focus in GeographicFocus
         ],
         "business_idea_format": {
             "description": "Please describe your business idea in this format:",
@@ -185,6 +189,19 @@ def _get_biggest_challenge_label(challenge: BiggestChallenge) -> str:
         BiggestChallenge.OVERWHELMED: "Feel overwhelmed and don't know where to start"
     }
     return labels.get(challenge, challenge.value)
+
+def _get_geographic_focus_label(focus: GeographicFocus) -> str:
+    """Get human-readable label for geographic focus"""
+    labels = {
+        GeographicFocus.NORTH_AMERICA: "North America",
+        GeographicFocus.EUROPE: "Europe",
+        GeographicFocus.ASIA: "Asia",
+        GeographicFocus.AFRICA: "Africa",
+        GeographicFocus.SOUTH_AMERICA: "South America",
+        GeographicFocus.OCEANIA: "Oceania",
+        GeographicFocus.INTERNATIONAL: "International"
+    }
+    return labels.get(focus, focus.value)
 
 async def _get_completed_analyses(user_email: str, idea_id: str) -> List[str]:
     """Check which analyses have been completed for this idea"""

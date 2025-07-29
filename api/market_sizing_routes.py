@@ -25,7 +25,8 @@ async def analyze_market_sizing(
     authorization: Optional[str] = Depends(security)
 ):
     """
-    Perform comprehensive market sizing analysis with TAM/SAM/SOM calculations
+    Perform comprehensive market sizing analysis with TAM/SAM/SOM calculations.
+    Requires authentication and idea_id. Extracts all needed information from the idea.
     """
     start_time = time.time()
     
@@ -40,18 +41,34 @@ async def analyze_market_sizing(
                 user = await auth_service.get_user_by_email(user_email)
             except Exception as e:
                 print(f"Authentication failed: {e}")
-                # Continue without authentication
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Authentication required"
+                )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required"
+            )
         
-        # Create market sizing input
+        # Get the business idea to extract all needed information
+        business_idea = await user_management_service.get_business_idea(user_email, request.idea_id)
+        if not business_idea:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Business idea not found"
+            )
+        
+        # Create market sizing input from the business idea
         market_input = MarketSizingInput(
-            business_idea=request.business_idea,
-            industry=request.industry,
-            target_market=request.target_market,
-            geographic_scope=request.geographic_scope,
-            custom_geography=request.custom_geography,
-            customer_type=request.customer_type,
-            revenue_model=request.revenue_model,
-            estimated_price_point=request.estimated_price_point,
+            business_idea=business_idea.description,
+            industry=business_idea.industry or "Technology",
+            target_market=business_idea.target_market or business_idea.target_who or "General market",
+            geographic_scope=GeographicScope.USA,  # Default, can be enhanced later
+            custom_geography=None,
+            customer_type=CustomerType.B2C,  # Default, can be enhanced later
+            revenue_model=RevenueModel.SUBSCRIPTION,  # Default, can be enhanced later
+            estimated_price_point=None,
             idea_id=request.idea_id
         )
         
