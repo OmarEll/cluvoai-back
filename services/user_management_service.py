@@ -238,11 +238,12 @@ class UserManagementService:
             return None
     
     async def update_business_idea(self, user_email: str, idea_id: str, idea_update: BusinessIdeaUpdate) -> BusinessIdea:
-        """Update a business idea"""
+        """Update a business idea with all comprehensive questionnaire fields"""
         try:
             # Build update document
             update_data = {"ideas.$.updated_at": datetime.utcnow()}
             
+            # Core fields
             if idea_update.title is not None:
                 update_data["ideas.$.title"] = idea_update.title
             if idea_update.description is not None:
@@ -257,7 +258,8 @@ class UserManagementService:
                 update_data["ideas.$.target_market"] = idea_update.target_market
             if idea_update.industry is not None:
                 update_data["ideas.$.industry"] = idea_update.industry
-            # Add support for enhanced fields
+            
+            # Enhanced fields from onboarding (existing)
             if idea_update.business_level is not None:
                 update_data["ideas.$.business_level"] = idea_update.business_level
             if idea_update.geographic_focus is not None:
@@ -268,6 +270,53 @@ class UserManagementService:
                 update_data["ideas.$.problem_what"] = idea_update.problem_what
             if idea_update.solution_how is not None:
                 update_data["ideas.$.solution_how"] = idea_update.solution_how
+            
+            # New comprehensive questionnaire fields (all 18 fields)
+            # Core Questions
+            if idea_update.business_experience is not None:
+                update_data["ideas.$.business_experience"] = idea_update.business_experience
+            if idea_update.business_stage is not None:
+                update_data["ideas.$.business_stage"] = idea_update.business_stage
+            if idea_update.main_goal_new is not None:
+                update_data["ideas.$.main_goal_new"] = idea_update.main_goal_new
+            if idea_update.biggest_challenge_new is not None:
+                update_data["ideas.$.biggest_challenge_new"] = idea_update.biggest_challenge_new
+            if idea_update.geographic_focus_new is not None:
+                update_data["ideas.$.geographic_focus_new"] = idea_update.geographic_focus_new
+            
+            # Target Audience Questions
+            if idea_update.target_customer_type is not None:
+                update_data["ideas.$.target_customer_type"] = idea_update.target_customer_type
+            if idea_update.target_age_group is not None:
+                update_data["ideas.$.target_age_group"] = idea_update.target_age_group
+            if idea_update.target_income is not None:
+                update_data["ideas.$.target_income"] = idea_update.target_income
+            
+            # Market Context
+            if idea_update.industry_new is not None:
+                update_data["ideas.$.industry_new"] = idea_update.industry_new
+            if idea_update.problem_urgency is not None:
+                update_data["ideas.$.problem_urgency"] = idea_update.problem_urgency
+            
+            # Competitive Awareness
+            if idea_update.competitor_knowledge is not None:
+                update_data["ideas.$.competitor_knowledge"] = idea_update.competitor_knowledge
+            if idea_update.differentiation is not None:
+                update_data["ideas.$.differentiation"] = idea_update.differentiation
+            
+            # Business Model
+            if idea_update.monetization_model is not None:
+                update_data["ideas.$.monetization_model"] = idea_update.monetization_model
+            if idea_update.expected_pricing is not None:
+                update_data["ideas.$.expected_pricing"] = idea_update.expected_pricing
+            
+            # Resources & Timeline
+            if idea_update.available_budget is not None:
+                update_data["ideas.$.available_budget"] = idea_update.available_budget
+            if idea_update.launch_timeline is not None:
+                update_data["ideas.$.launch_timeline"] = idea_update.launch_timeline
+            if idea_update.time_commitment is not None:
+                update_data["ideas.$.time_commitment"] = idea_update.time_commitment
             
             # Update the idea
             result = await self.users_collection().update_one(

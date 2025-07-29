@@ -209,15 +209,48 @@ class BusinessIdea(BaseModel):
     current_stage: Optional[CurrentStage] = None
     main_goal: Optional[str] = None
     biggest_challenge: Optional[str] = None
-    # Enhanced fields from onboarding
+    
+    # Enhanced fields from onboarding (existing)
     business_level: Optional[BusinessLevel] = None
     geographic_focus: Optional[GeographicFocus] = None
     target_who: Optional[str] = None
     problem_what: Optional[str] = None
     solution_how: Optional[str] = None
+    
     # Additional fields for analysis
     target_market: Optional[str] = None
     industry: Optional[str] = None
+    
+    # New comprehensive questionnaire fields (all 18 fields)
+    # Core Questions
+    business_experience: Optional[BusinessExperience] = None
+    business_stage: Optional[BusinessStage] = None
+    main_goal_new: Optional[MainGoalNew] = None
+    biggest_challenge_new: Optional[BiggestChallengeNew] = None
+    geographic_focus_new: Optional[GeographicFocusNew] = None
+    
+    # Target Audience Questions
+    target_customer_type: Optional[TargetCustomerType] = None
+    target_age_group: Optional[List[TargetAgeGroup]] = None
+    target_income: Optional[TargetIncome] = None
+    
+    # Market Context
+    industry_new: Optional[Industry] = None
+    problem_urgency: Optional[ProblemUrgency] = None
+    
+    # Competitive Awareness
+    competitor_knowledge: Optional[CompetitorKnowledge] = None
+    differentiation: Optional[str] = None
+    
+    # Business Model
+    monetization_model: Optional[MonetizationModel] = None
+    expected_pricing: Optional[ExpectedPricing] = None
+    
+    # Resources & Timeline
+    available_budget: Optional[AvailableBudget] = None
+    launch_timeline: Optional[LaunchTimeline] = None
+    time_commitment: Optional[TimeCommitment] = None
+    
     # Feature completion tracking
     completed_analyses: List[str] = Field(default_factory=list)  # ["competitor", "persona", "market_sizing"]
     created_at: Optional[datetime] = None
@@ -364,6 +397,7 @@ class BusinessIdeaCreate(BaseModel):
 
 
 class BusinessIdeaUpdate(BaseModel):
+    # Core fields
     title: Optional[str] = Field(None, min_length=1, max_length=100, description="Brief title for the idea")
     description: Optional[str] = Field(None, min_length=10, max_length=1000, description="Detailed description of the business idea")
     current_stage: Optional[CurrentStage] = Field(None, description="Current development stage")
@@ -371,12 +405,43 @@ class BusinessIdeaUpdate(BaseModel):
     biggest_challenge: Optional[str] = Field(None, min_length=5, max_length=500, description="Biggest challenge faced")
     target_market: Optional[str] = Field(None, max_length=200, description="Target market description")
     industry: Optional[str] = Field(None, max_length=100, description="Industry vertical")
-    # Enhanced fields from onboarding
+    
+    # Enhanced fields from onboarding (existing)
     business_level: Optional[BusinessLevel] = Field(None, description="Business experience level")
     geographic_focus: Optional[GeographicFocus] = Field(None, description="Target geographic focus")
     target_who: Optional[str] = Field(None, max_length=200, description="WHO we help")
     problem_what: Optional[str] = Field(None, max_length=500, description="WHAT problem we solve")
     solution_how: Optional[str] = Field(None, max_length=500, description="HOW we solve it")
+    
+    # New comprehensive questionnaire fields (all 18 fields)
+    # Core Questions
+    business_experience: Optional[BusinessExperience] = Field(None, description="What's your business experience level?")
+    business_stage: Optional[BusinessStage] = Field(None, description="What stage is your business in?")
+    main_goal_new: Optional[MainGoalNew] = Field(None, description="What's your main goal right now?")
+    biggest_challenge_new: Optional[BiggestChallengeNew] = Field(None, description="What's your biggest challenge?")
+    geographic_focus_new: Optional[GeographicFocusNew] = Field(None, description="What's your geographic focus?")
+    
+    # Target Audience Questions
+    target_customer_type: Optional[TargetCustomerType] = Field(None, description="Who is your ideal customer?")
+    target_age_group: Optional[List[TargetAgeGroup]] = Field(None, description="What age group is your primary target?")
+    target_income: Optional[TargetIncome] = Field(None, description="What's your target customer's annual income/budget?")
+    
+    # Market Context
+    industry_new: Optional[Industry] = Field(None, description="What industry/sector is your business in?")
+    problem_urgency: Optional[ProblemUrgency] = Field(None, description="How urgent is the problem you're solving?")
+    
+    # Competitive Awareness
+    competitor_knowledge: Optional[CompetitorKnowledge] = Field(None, description="Do you know who your main competitors are?")
+    differentiation: Optional[str] = Field(None, max_length=500, description="What makes you different from existing solutions?")
+    
+    # Business Model
+    monetization_model: Optional[MonetizationModel] = Field(None, description="How do you plan to make money?")
+    expected_pricing: Optional[ExpectedPricing] = Field(None, description="What's your expected price point?")
+    
+    # Resources & Timeline
+    available_budget: Optional[AvailableBudget] = Field(None, description="What's your available budget for this venture?")
+    launch_timeline: Optional[LaunchTimeline] = Field(None, description="When do you want to launch?")
+    time_commitment: Optional[TimeCommitment] = Field(None, description="How much time can you dedicate to this?")
 
 
 class Token(BaseModel):
