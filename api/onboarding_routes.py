@@ -4,7 +4,12 @@ from typing import List, Dict
 
 from core.user_models import (
     OnboardingRequest, OnboardingResponse, OnboardingQuestionnaire,
-    BusinessLevel, CurrentStage, MainGoal, BiggestChallenge, GeographicFocus
+    BusinessLevel, CurrentStage, MainGoal, BiggestChallenge, GeographicFocus,
+    # New comprehensive enums
+    BusinessExperience, BusinessStage, MainGoalNew, BiggestChallengeNew, 
+    GeographicFocusNew, TargetCustomerType, TargetAgeGroup, TargetIncome,
+    Industry, ProblemUrgency, CompetitorKnowledge, MonetizationModel,
+    ExpectedPricing, AvailableBudget, LaunchTimeline, TimeCommitment
 )
 from services.auth_service import auth_service
 from services.user_management_service import user_management_service
@@ -42,7 +47,7 @@ async def submit_onboarding_questionnaire(
         )
         
         return OnboardingResponse(
-            message=f"Welcome! We've created your business idea and personalized your journey based on your {questionnaire.current_stage.value} stage.",
+            message=f"Welcome! We've created your business idea and personalized your journey based on your {questionnaire.business_stage.value} stage.",
             business_idea=business_idea,
             recommended_next_steps=next_steps,
             feature_roadmap=feature_roadmap
@@ -58,33 +63,95 @@ async def submit_onboarding_questionnaire(
 @router.get("/options")
 async def get_onboarding_options():
     """
-    Get all available options for the onboarding questionnaire
+    Get all available options for the comprehensive onboarding questionnaire
     """
     return {
-        "business_levels": [
-            {"value": level.value, "label": _get_business_level_label(level)} 
-            for level in BusinessLevel
+        # Core Questions
+        "business_experience": [
+            {"value": exp.value, "label": _get_business_experience_label(exp)} 
+            for exp in BusinessExperience
         ],
-        "current_stages": [
-            {"value": stage.value, "label": _get_current_stage_label(stage)} 
-            for stage in CurrentStage
+        "business_stage": [
+            {"value": stage.value, "label": _get_business_stage_label(stage)} 
+            for stage in BusinessStage
         ],
-        "main_goals": [
-            {"value": goal.value, "label": _get_main_goal_label(goal)} 
-            for goal in MainGoal
+        "main_goal": [
+            {"value": goal.value, "label": _get_main_goal_new_label(goal)} 
+            for goal in MainGoalNew
         ],
-        "biggest_challenges": [
-            {"value": challenge.value, "label": _get_biggest_challenge_label(challenge)} 
-            for challenge in BiggestChallenge
+        "biggest_challenge": [
+            {"value": challenge.value, "label": _get_biggest_challenge_new_label(challenge)} 
+            for challenge in BiggestChallengeNew
         ],
         "geographic_focus": [
-            {"value": focus.value, "label": _get_geographic_focus_label(focus)} 
-            for focus in GeographicFocus
+            {"value": focus.value, "label": _get_geographic_focus_new_label(focus)} 
+            for focus in GeographicFocusNew
         ],
+        
+        # Target Audience Questions
+        "target_customer_type": [
+            {"value": customer.value, "label": _get_target_customer_type_label(customer)} 
+            for customer in TargetCustomerType
+        ],
+        "target_age_group": [
+            {"value": age.value, "label": _get_target_age_group_label(age)} 
+            for age in TargetAgeGroup
+        ],
+        "target_income": [
+            {"value": income.value, "label": _get_target_income_label(income)} 
+            for income in TargetIncome
+        ],
+        
+        # Market Context
+        "industry": [
+            {"value": ind.value, "label": _get_industry_label(ind)} 
+            for ind in Industry
+        ],
+        "problem_urgency": [
+            {"value": urgency.value, "label": _get_problem_urgency_label(urgency)} 
+            for urgency in ProblemUrgency
+        ],
+        
+        # Competitive Awareness
+        "competitor_knowledge": [
+            {"value": knowledge.value, "label": _get_competitor_knowledge_label(knowledge)} 
+            for knowledge in CompetitorKnowledge
+        ],
+        
+        # Business Model
+        "monetization_model": [
+            {"value": model.value, "label": _get_monetization_model_label(model)} 
+            for model in MonetizationModel
+        ],
+        "expected_pricing": [
+            {"value": pricing.value, "label": _get_expected_pricing_label(pricing)} 
+            for pricing in ExpectedPricing
+        ],
+        
+        # Resources & Timeline
+        "available_budget": [
+            {"value": budget.value, "label": _get_available_budget_label(budget)} 
+            for budget in AvailableBudget
+        ],
+        "launch_timeline": [
+            {"value": timeline.value, "label": _get_launch_timeline_label(timeline)} 
+            for timeline in LaunchTimeline
+        ],
+        "time_commitment": [
+            {"value": time.value, "label": _get_time_commitment_label(time)} 
+            for time in TimeCommitment
+        ],
+        
+        # Business Idea Format Guidance
         "business_idea_format": {
-            "description": "Please describe your business idea in this format:",
-            "template": "We help [WHO] solve [WHAT problem] by [HOW]",
-            "example": "We help small business owners solve inventory management problems by providing an AI-powered tracking platform"
+            "description": "Please describe your business idea clearly and concisely:",
+            "guidelines": [
+                "What problem does your idea solve?",
+                "Who is your target customer?",
+                "How does your solution work?",
+                "What makes it unique?"
+            ],
+            "example": "A mobile app that helps small restaurant owners manage their inventory and reduce food waste by using AI to predict demand patterns and suggest optimal ordering quantities."
         }
     }
 
@@ -97,8 +164,7 @@ async def get_personalized_roadmap(
     Get personalized feature roadmap based on completed analyses
     """
     try:
-        
-        # Get business idea
+        # Get user's business idea
         business_idea = await user_management_service.get_business_idea(user_email, idea_id)
         if not business_idea:
             raise HTTPException(
@@ -106,92 +172,249 @@ async def get_personalized_roadmap(
                 detail="Business idea not found"
             )
         
-        # Check which analyses are completed
-        completed_analyses = await _get_completed_analyses(user_email, idea_id)
+        # Get completed analyses for this idea
+        completed_analyses = await analysis_storage_service.get_idea_analyses(idea_id)
         
-        # Generate intelligent next steps based on completion status
-        next_steps = await _generate_intelligent_next_steps(
+        # Generate dynamic roadmap based on current stage and completed analyses
+        roadmap = user_management_service.generate_dynamic_roadmap(
             business_idea, completed_analyses
         )
         
-        # Get contextual insights from completed analyses
-        contextual_insights = await _get_contextual_insights(
-            user_email, idea_id, completed_analyses
-        )
-        
         return {
-            "business_idea": business_idea,
-            "completed_analyses": completed_analyses,
-            "recommended_next_steps": next_steps,
-            "contextual_insights": contextual_insights,
-            "available_features": [
-                {
-                    "feature": "competitor_analysis",
-                    "status": "completed" if "competitor" in completed_analyses else "available",
-                    "benefit": "Understand market competition and identify gaps"
-                },
-                {
-                    "feature": "persona_analysis", 
-                    "status": "completed" if "persona" in completed_analyses else "available",
-                    "benefit": "Deep dive into your target customer needs"
-                },
-                {
-                    "feature": "market_sizing",
-                    "status": "completed" if "market_sizing" in completed_analyses else "available", 
-                    "benefit": "Quantify your market opportunity and revenue potential"
-                }
-            ]
+            "idea_id": idea_id,
+            "current_stage": business_idea.current_stage,
+            "completed_analyses": [analysis.analysis_type for analysis in completed_analyses],
+            "recommended_next_steps": roadmap["next_steps"],
+            "feature_priorities": roadmap["priorities"],
+            "estimated_timeline": roadmap["timeline"]
         }
         
-    except HTTPException:
-        raise
     except Exception as e:
-        print(f"Error getting personalized roadmap: {e}")
+        print(f"Error generating personalized roadmap: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get personalized roadmap: {str(e)}"
+            detail=f"Failed to generate personalized roadmap: {str(e)}"
         )
 
-# Helper functions
+# Helper functions for label generation
+def _get_business_experience_label(experience: BusinessExperience) -> str:
+    labels = {
+        BusinessExperience.FIRST_TIME: "First-time entrepreneur",
+        BusinessExperience.STARTED_1_2: "Have started 1-2 businesses",
+        BusinessExperience.SERIAL_3_PLUS: "Serial entrepreneur (3+ businesses)",
+        BusinessExperience.CONSULTANT_ADVISOR: "Business consultant/advisor"
+    }
+    return labels.get(experience, experience.value)
 
+def _get_business_stage_label(stage: BusinessStage) -> str:
+    labels = {
+        BusinessStage.JUST_IDEA: "Just an idea",
+        BusinessStage.VALIDATING: "Validating the idea",
+        BusinessStage.BUILDING_MVP: "Building MVP",
+        BusinessStage.LAUNCHED_0_6_MONTHS: "Launched (0-6 months)",
+        BusinessStage.GROWING_6_PLUS_MONTHS: "Growing (6+ months)",
+        BusinessStage.SCALING_EXPANDING: "Scaling/Expanding"
+    }
+    return labels.get(stage, stage.value)
+
+def _get_main_goal_new_label(goal: MainGoalNew) -> str:
+    labels = {
+        MainGoalNew.VALIDATE_IDEA: "Validate my idea",
+        MainGoalNew.UNDERSTAND_MARKET: "Understand the market",
+        MainGoalNew.FIND_CUSTOMERS: "Find customers",
+        MainGoalNew.BUILD_PRODUCT: "Build the product",
+        MainGoalNew.GET_FUNDING: "Get funding",
+        MainGoalNew.GROW_REVENUE: "Grow revenue",
+        MainGoalNew.SCALE_OPERATIONS: "Scale operations"
+    }
+    return labels.get(goal, goal.value)
+
+def _get_biggest_challenge_new_label(challenge: BiggestChallengeNew) -> str:
+    labels = {
+        BiggestChallengeNew.IDEA_WONT_WORK: "Don't know if idea will work",
+        BiggestChallengeNew.UNDERSTANDING_COMPETITION: "Understanding competition",
+        BiggestChallengeNew.FINDING_CUSTOMERS: "Finding customers",
+        BiggestChallengeNew.BUILDING_PRODUCT: "Building the product",
+        BiggestChallengeNew.GETTING_FUNDING: "Getting funding",
+        BiggestChallengeNew.MARKETING_SALES: "Marketing/Sales",
+        BiggestChallengeNew.TEAM_BUILDING: "Team building",
+        BiggestChallengeNew.OTHER: "Other"
+    }
+    return labels.get(challenge, challenge.value)
+
+def _get_geographic_focus_new_label(focus: GeographicFocusNew) -> str:
+    labels = {
+        GeographicFocusNew.LOCAL_CITY: "Local/City",
+        GeographicFocusNew.STATE_PROVINCE: "State/Province",
+        GeographicFocusNew.COUNTRY_WIDE: "Country-wide",
+        GeographicFocusNew.NORTH_AMERICA: "North America",
+        GeographicFocusNew.EUROPE: "Europe",
+        GeographicFocusNew.ASIA: "Asia",
+        GeographicFocusNew.GLOBAL: "Global",
+        GeographicFocusNew.OTHER: "Other"
+    }
+    return labels.get(focus, focus.value)
+
+def _get_target_customer_type_label(customer: TargetCustomerType) -> str:
+    labels = {
+        TargetCustomerType.B2C_CONSUMERS: "Individual consumers (B2C)",
+        TargetCustomerType.SMALL_BUSINESS_1_50: "Small businesses (1-50 employees)",
+        TargetCustomerType.MID_MARKET_51_500: "Mid-market (51-500 employees)",
+        TargetCustomerType.ENTERPRISE_500_PLUS: "Enterprise (500+ employees)",
+        TargetCustomerType.GOVERNMENT_NONPROFIT: "Government/Non-profit",
+        TargetCustomerType.OTHER: "Other"
+    }
+    return labels.get(customer, customer.value)
+
+def _get_target_age_group_label(age: TargetAgeGroup) -> str:
+    labels = {
+        TargetAgeGroup.AGE_18_25: "18-25",
+        TargetAgeGroup.AGE_26_35: "26-35",
+        TargetAgeGroup.AGE_36_45: "36-45",
+        TargetAgeGroup.AGE_46_55: "46-55",
+        TargetAgeGroup.AGE_55_PLUS: "55+",
+        TargetAgeGroup.ALL_AGES: "All ages"
+    }
+    return labels.get(age, age.value)
+
+def _get_target_income_label(income: TargetIncome) -> str:
+    labels = {
+        TargetIncome.UNDER_50K: "Under $50K",
+        TargetIncome.FROM_50K_100K: "$50K-$100K",
+        TargetIncome.FROM_100K_250K: "$100K-$250K",
+        TargetIncome.OVER_250K: "$250K+",
+        TargetIncome.ENTERPRISE_BUDGET: "Enterprise budget",
+        TargetIncome.NOT_RELEVANT: "Not relevant"
+    }
+    return labels.get(income, income.value)
+
+def _get_industry_label(industry: Industry) -> str:
+    labels = {
+        Industry.TECHNOLOGY_SOFTWARE: "Technology/Software",
+        Industry.HEALTHCARE: "Healthcare",
+        Industry.FINANCE_FINTECH: "Finance/Fintech",
+        Industry.ECOMMERCE_RETAIL: "E-commerce/Retail",
+        Industry.EDUCATION: "Education",
+        Industry.REAL_ESTATE: "Real Estate",
+        Industry.MANUFACTURING: "Manufacturing",
+        Industry.FOOD_BEVERAGE: "Food & Beverage",
+        Industry.PROFESSIONAL_SERVICES: "Professional Services",
+        Industry.ENTERTAINMENT_MEDIA: "Entertainment/Media",
+        Industry.OTHER: "Other"
+    }
+    return labels.get(industry, industry.value)
+
+def _get_problem_urgency_label(urgency: ProblemUrgency) -> str:
+    labels = {
+        ProblemUrgency.CRITICAL: "Critical - customers actively seeking solutions",
+        ProblemUrgency.IMPORTANT: "Important - customers aware but not urgent",
+        ProblemUrgency.NICE_TO_HAVE: "Nice-to-have - customers don't actively seek solutions",
+        ProblemUrgency.NOT_SURE: "Not sure"
+    }
+    return labels.get(urgency, urgency.value)
+
+def _get_competitor_knowledge_label(knowledge: CompetitorKnowledge) -> str:
+    labels = {
+        CompetitorKnowledge.KNOW_3_PLUS: "Yes, I know 3+ direct competitors",
+        CompetitorKnowledge.KNOW_1_2: "Yes, I know 1-2 competitors",
+        CompetitorKnowledge.SOME_IDEAS: "I have some ideas but not sure",
+        CompetitorKnowledge.DONT_KNOW: "No, I don't know my competitors"
+    }
+    return labels.get(knowledge, knowledge.value)
+
+def _get_monetization_model_label(model: MonetizationModel) -> str:
+    labels = {
+        MonetizationModel.SUBSCRIPTION_SAAS: "Subscription/SaaS",
+        MonetizationModel.ONE_TIME_PURCHASE: "One-time purchase",
+        MonetizationModel.FREEMIUM: "Freemium",
+        MonetizationModel.MARKETPLACE_COMMISSION: "Marketplace/Commission",
+        MonetizationModel.ADVERTISING: "Advertising",
+        MonetizationModel.CONSULTING_SERVICES: "Consulting/Services",
+        MonetizationModel.NOT_SURE: "Not sure yet"
+    }
+    return labels.get(model, model.value)
+
+def _get_expected_pricing_label(pricing: ExpectedPricing) -> str:
+    labels = {
+        ExpectedPricing.FREE: "Free",
+        ExpectedPricing.UNDER_10_MONTH: "Under $10/month",
+        ExpectedPricing.FROM_10_50_MONTH: "$10-50/month",
+        ExpectedPricing.FROM_50_200_MONTH: "$50-200/month",
+        ExpectedPricing.OVER_200_MONTH: "$200+/month",
+        ExpectedPricing.CUSTOM_PRICING: "Custom pricing",
+        ExpectedPricing.NOT_APPLICABLE: "Not applicable"
+    }
+    return labels.get(pricing, pricing.value)
+
+def _get_available_budget_label(budget: AvailableBudget) -> str:
+    labels = {
+        AvailableBudget.UNDER_5K: "Under $5K",
+        AvailableBudget.FROM_5K_25K: "$5K-$25K",
+        AvailableBudget.FROM_25K_100K: "$25K-$100K",
+        AvailableBudget.FROM_100K_500K: "$100K-$500K",
+        AvailableBudget.OVER_500K: "$500K+",
+        AvailableBudget.PRE_FUNDING: "Pre-funding/Seeking investment"
+    }
+    return labels.get(budget, budget.value)
+
+def _get_launch_timeline_label(timeline: LaunchTimeline) -> str:
+    labels = {
+        LaunchTimeline.WITHIN_3_MONTHS: "Within 3 months",
+        LaunchTimeline.FROM_3_6_MONTHS: "3-6 months",
+        LaunchTimeline.FROM_6_12_MONTHS: "6-12 months",
+        LaunchTimeline.OVER_12_MONTHS: "12+ months",
+        LaunchTimeline.ALREADY_LAUNCHED: "Already launched"
+    }
+    return labels.get(timeline, timeline.value)
+
+def _get_time_commitment_label(time: TimeCommitment) -> str:
+    labels = {
+        TimeCommitment.FULL_TIME_40_PLUS: "Full-time (40+ hrs/week)",
+        TimeCommitment.PART_TIME_20_39: "Part-time (20-39 hrs/week)",
+        TimeCommitment.SIDE_PROJECT_5_19: "Side project (5-19 hrs/week)",
+        TimeCommitment.VERY_LIMITED_UNDER_5: "Very limited (<5 hrs/week)"
+    }
+    return labels.get(time, time.value)
+
+
+# Legacy helper functions for backward compatibility
 def _get_business_level_label(level: BusinessLevel) -> str:
     labels = {
-        BusinessLevel.FIRST_TIME: "First time entrepreneur with an idea",
-        BusinessLevel.SOME_EXPERIENCE: "Have some business experience (5-10 years)",
-        BusinessLevel.EXPERIENCED: "Experienced entrepreneur/founder"
+        BusinessLevel.FIRST_TIME: "I'm a first-time entrepreneur",
+        BusinessLevel.SOME_EXPERIENCE: "I have some business experience (5-10 years)",
+        BusinessLevel.EXPERIENCED: "I'm an experienced entrepreneur"
     }
     return labels.get(level, level.value)
 
 def _get_current_stage_label(stage: CurrentStage) -> str:
     labels = {
-        CurrentStage.IDEA: "Have an idea, haven't validated it yet",
-        CurrentStage.VALIDATING: "Validating idea with potential customers",
-        CurrentStage.BUILDING: "Building/developing my product",
-        CurrentStage.LAUNCHING: "Ready to launch or already launched"
+        CurrentStage.IDEA: "I have an idea",
+        CurrentStage.VALIDATING: "I'm validating my idea",
+        CurrentStage.BUILDING: "I'm building my product",
+        CurrentStage.LAUNCHING: "I'm ready to launch"
     }
     return labels.get(stage, stage.value)
 
 def _get_main_goal_label(goal: MainGoal) -> str:
     labels = {
         MainGoal.VALIDATE_IDEA: "Validate if people want my idea",
-        MainGoal.FIND_CUSTOMERS: "Find and talk to potential customers",
-        MainGoal.BUILD_MVP: "Build my first version/MVP",
+        MainGoal.FIND_CUSTOMERS: "Find and talk to customers",
+        MainGoal.BUILD_MVP: "Build my first version (MVP)",
         MainGoal.GET_PAYING_CUSTOMERS: "Get my first paying customers"
     }
     return labels.get(goal, goal.value)
 
 def _get_biggest_challenge_label(challenge: BiggestChallenge) -> str:
     labels = {
-        BiggestChallenge.NEED_VALIDATION: "Don't know if anyone actually needs this",
-        BiggestChallenge.FIND_CUSTOMERS: "Don't know how to find customers to talk to",
-        BiggestChallenge.WHAT_TO_BUILD: "Don't know what to build first",
-        BiggestChallenge.GET_SALES: "Don't know how to get people to buy",
-        BiggestChallenge.OVERWHELMED: "Feel overwhelmed and don't know where to start"
+        BiggestChallenge.NEED_VALIDATION: "I don't know if anyone needs this",
+        BiggestChallenge.FIND_CUSTOMERS: "I don't know how to find customers",
+        BiggestChallenge.WHAT_TO_BUILD: "I don't know what to build first",
+        BiggestChallenge.GET_SALES: "I don't know how to get people to buy",
+        BiggestChallenge.OVERWHELMED: "I feel overwhelmed and don't know where to start"
     }
     return labels.get(challenge, challenge.value)
 
 def _get_geographic_focus_label(focus: GeographicFocus) -> str:
-    """Get human-readable label for geographic focus"""
     labels = {
         GeographicFocus.NORTH_AMERICA: "North America",
         GeographicFocus.EUROPE: "Europe",
@@ -201,121 +424,4 @@ def _get_geographic_focus_label(focus: GeographicFocus) -> str:
         GeographicFocus.OCEANIA: "Oceania",
         GeographicFocus.INTERNATIONAL: "International"
     }
-    return labels.get(focus, focus.value)
-
-async def _get_completed_analyses(user_email: str, idea_id: str) -> List[str]:
-    """Check which analyses have been completed for this idea"""
-    completed = []
-    
-    try:
-        # Check competitor analysis
-        competitor_analysis = await analysis_storage_service.get_user_analysis(
-            user_email, idea_id, AnalysisType.COMPETITOR, include_feedback=False
-        )
-        if competitor_analysis:
-            completed.append("competitor")
-        
-        # Check persona analysis
-        persona_analysis = await analysis_storage_service.get_user_analysis(
-            user_email, idea_id, AnalysisType.PERSONA, include_feedback=False
-        )
-        if persona_analysis:
-            completed.append("persona")
-        
-        # Check market sizing analysis
-        market_sizing_analysis = await analysis_storage_service.get_user_analysis(
-            user_email, idea_id, AnalysisType.MARKET_SIZING, include_feedback=False
-        )
-        if market_sizing_analysis:
-            completed.append("market_sizing")
-            
-    except Exception as e:
-        print(f"Error checking completed analyses: {e}")
-    
-    return completed
-
-async def _generate_intelligent_next_steps(
-    business_idea: dict, 
-    completed_analyses: List[str]
-) -> List[str]:
-    """Generate intelligent next steps based on what's already completed"""
-    next_steps = []
-    
-    # If no analyses completed yet
-    if not completed_analyses:
-        if business_idea.get("biggest_challenge") == BiggestChallenge.NEED_VALIDATION.value:
-            next_steps.append("Start with persona analysis to validate customer needs")
-        elif business_idea.get("biggest_challenge") == BiggestChallenge.WHAT_TO_BUILD.value:
-            next_steps.append("Begin with competitor analysis to see what exists and find gaps")
-        else:
-            next_steps.append("Start with competitor analysis to understand your market landscape")
-        return next_steps
-    
-    # If competitor analysis is done but others aren't
-    if "competitor" in completed_analyses:
-        if "persona" not in completed_analyses:
-            next_steps.append("Run persona analysis to understand your target customers better")
-            next_steps.append("Use competitor insights to identify underserved customer segments")
-        if "market_sizing" not in completed_analyses:
-            next_steps.append("Conduct market sizing analysis using competitor pricing intelligence")
-    
-    # If persona analysis is done but others aren't
-    if "persona" in completed_analyses:
-        if "competitor" not in completed_analyses:
-            next_steps.append("Analyze competitors to see how they serve your target personas")
-        if "market_sizing" not in completed_analyses:
-            next_steps.append("Size your market using persona insights for accurate targeting")
-    
-    # If both competitor and persona are done
-    if "competitor" in completed_analyses and "persona" in completed_analyses:
-        if "market_sizing" not in completed_analyses:
-            next_steps.append("Run market sizing with rich context from competitor and persona analyses")
-            next_steps.append("Leverage competitive pricing and customer insights for accurate calculations")
-        else:
-            next_steps.append("All core analyses complete! Review insights for strategic planning")
-            next_steps.append("Consider developing your go-to-market strategy")
-    
-    # If market sizing is done but others aren't
-    if "market_sizing" in completed_analyses:
-        if "competitor" not in completed_analyses:
-            next_steps.append("Add competitor analysis to validate market sizing assumptions")
-        if "persona" not in completed_analyses:
-            next_steps.append("Run persona analysis to better target your market segments")
-    
-    return next_steps[:4]  # Limit to 4 next steps
-
-async def _get_contextual_insights(
-    user_email: str, 
-    idea_id: str, 
-    completed_analyses: List[str]
-) -> Dict[str, str]:
-    """Get key insights from completed analyses"""
-    insights = {}
-    
-    try:
-        if "competitor" in completed_analyses:
-            competitor_analysis = await analysis_storage_service.get_user_analysis(
-                user_email, idea_id, AnalysisType.COMPETITOR, include_feedback=False
-            )
-            if competitor_analysis and competitor_analysis.competitor_report:
-                insights["competitor"] = f"Found {competitor_analysis.competitor_report.total_competitors} competitors with {len(competitor_analysis.competitor_report.market_gaps)} market gaps identified"
-        
-        if "persona" in completed_analyses:
-            persona_analysis = await analysis_storage_service.get_user_analysis(
-                user_email, idea_id, AnalysisType.PERSONA, include_feedback=False
-            )
-            if persona_analysis and persona_analysis.persona_report:
-                insights["persona"] = f"Identified {len(persona_analysis.persona_report.personas)} target personas with detailed behavioral insights"
-        
-        if "market_sizing" in completed_analyses:
-            market_analysis = await analysis_storage_service.get_user_analysis(
-                user_email, idea_id, AnalysisType.MARKET_SIZING, include_feedback=False
-            )
-            if market_analysis and market_analysis.market_sizing_report:
-                tam = market_analysis.market_sizing_report.tam_sam_som_breakdown.tam
-                insights["market_sizing"] = f"Total addressable market estimated at ${tam:,.0f} with detailed revenue projections"
-                
-    except Exception as e:
-        print(f"Error getting contextual insights: {e}")
-    
-    return insights 
+    return labels.get(focus, focus.value) 

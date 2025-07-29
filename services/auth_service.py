@@ -6,7 +6,7 @@ from pymongo.errors import DuplicateKeyError
 from fastapi import HTTPException, status
 import uuid
 
-from core.user_models import UserCreate, UserInDB, UserResponse, UserRole, TokenData, GoogleOAuthUser
+from core.user_models import UserCreate, UserInDB, UserRole, TokenData, GoogleOAuthUser
 from core.database import get_users_collection
 from config.settings import settings
 from services.google_oauth_service import google_oauth_service
@@ -81,7 +81,7 @@ class AuthService:
                 headers={"WWW-Authenticate": "Bearer"},
             )
     
-    async def create_user(self, user_data: UserCreate) -> UserResponse:
+    async def create_user(self, user_data: UserCreate) -> UserInDB:
         """Create a new user"""
         try:
             # Check database connection
@@ -121,19 +121,7 @@ class AuthService:
             result = await users_collection.insert_one(user_doc)
             
             if result.inserted_id:
-                return UserResponse(
-                    id=user_doc["id"],
-                    first_name=user_doc["first_name"],
-                    last_name=user_doc["last_name"],
-                    email=user_doc["email"],
-                    birthday=user_doc["birthday"],
-                    experience_level=user_doc["experience_level"],
-                    google_id=user_doc["google_id"],
-                    profile_picture=user_doc["profile_picture"],
-                    is_oauth_user=user_doc["is_oauth_user"],
-                    role=user_doc["role"],
-                    is_active=user_doc["is_active"]
-                )
+                return UserInDB.from_mongo(user_doc)
             else:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -153,7 +141,7 @@ class AuthService:
                 detail=f"Failed to create user: {str(e)}"
             )
     
-    async def create_google_user(self, google_user_data: GoogleOAuthUser) -> UserResponse:
+    async def create_google_user(self, google_user_data: GoogleOAuthUser) -> UserInDB:
         """Create a user from Google OAuth data"""
         try:
             # Check database connection
@@ -181,19 +169,7 @@ class AuthService:
                     {"$set": update_data}
                 )
                 
-                return UserResponse(
-                    id=existing_user["id"],
-                    first_name=existing_user["first_name"],
-                    last_name=existing_user["last_name"],
-                    email=existing_user["email"],
-                    birthday=existing_user.get("birthday"),
-                    experience_level=existing_user.get("experience_level"),
-                    google_id=google_user_data.google_id,
-                    profile_picture=google_user_data.profile_picture,
-                    is_oauth_user=True,
-                    role=existing_user.get("role", UserRole.USER),
-                    is_active=existing_user.get("is_active", True)
-                )
+                return UserInDB.from_mongo(existing_user)
             
             # Create new user from Google data
             user_doc = {
@@ -218,19 +194,7 @@ class AuthService:
             result = await users_collection.insert_one(user_doc)
             
             if result.inserted_id:
-                return UserResponse(
-                    id=user_doc["id"],
-                    first_name=user_doc["first_name"],
-                    last_name=user_doc["last_name"],
-                    email=user_doc["email"],
-                    birthday=user_doc["birthday"],
-                    experience_level=user_doc["experience_level"],
-                    google_id=user_doc["google_id"],
-                    profile_picture=user_doc["profile_picture"],
-                    is_oauth_user=user_doc["is_oauth_user"],
-                    role=user_doc["role"],
-                    is_active=user_doc["is_active"]
-                )
+                return UserInDB.from_mongo(user_doc)
             else:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

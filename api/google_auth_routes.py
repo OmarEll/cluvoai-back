@@ -1,12 +1,16 @@
-from fastapi import APIRouter, HTTPException, status, Query, Request, Response
+from fastapi import APIRouter, HTTPException, Request, status, Query
 from fastapi.responses import RedirectResponse
-from pydantic import BaseModel
-from typing import Optional
+import httpx
+from urllib.parse import urlencode
+import asyncio
+from typing import Optional, Dict
+import secrets
 import uuid
+from pydantic import BaseModel
 
+from core.user_models import GoogleOAuthUser, Token, UserInDB
 from services.google_oauth_service import google_oauth_service
 from services.auth_service import auth_service
-from core.user_models import GoogleOAuthUser, UserResponse
 from config.settings import settings
 
 
@@ -17,7 +21,7 @@ class GoogleAuthResponse(BaseModel):
     """Response model for successful Google authentication"""
     access_token: str
     token_type: str = "bearer"
-    user: UserResponse
+    user: UserInDB
     message: str = "Successfully authenticated with Google"
 
 

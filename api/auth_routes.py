@@ -1,9 +1,11 @@
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, HTTPException, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from datetime import timedelta
+from typing import Optional
 
-from core.user_models import UserCreate, UserResponse, UserLogin, Token, UserInDB
+from core.user_models import UserCreate, UserLogin, Token, UserInDB
 from services.auth_service import auth_service
+from services.google_oauth_service import google_oauth_service
 from config.settings import settings
 from api.google_auth_routes import router as google_auth_router
 
@@ -14,7 +16,7 @@ security = HTTPBearer()
 router.include_router(google_auth_router, prefix="/oauth", tags=["Google OAuth"])
 
 
-@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/register", response_model=UserInDB, status_code=status.HTTP_201_CREATED)
 async def register_user(user_data: UserCreate):
     """
     Register a new user
@@ -78,7 +80,7 @@ async def login_user(user_credentials: UserLogin):
         )
 
 
-@router.get("/me", response_model=UserResponse)
+@router.get("/me", response_model=UserInDB)
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """
     Get current user information
@@ -95,16 +97,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
                 detail="User not found"
             )
         
-        return UserResponse(
-            id=user.id,
-            first_name=user.first_name,
-            last_name=user.last_name,
-            email=user.email,
-            role=user.role,
-            is_active=user.is_active,
-            created_at=user.created_at,
-            last_login=user.last_login
-        )
+        return user
         
     except HTTPException:
         raise
