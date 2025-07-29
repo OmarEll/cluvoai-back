@@ -303,6 +303,7 @@ class UserInDB(UserBase):
     id: Optional[str] = None
     hashed_password: Optional[str] = None
     role: UserRole = UserRole.USER
+    is_active: bool = True  # Add missing is_active field
     email_verified: bool = False
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
@@ -344,6 +345,10 @@ class UserInDB(UserBase):
             }
             if data["current_stage"] in stage_mapping:
                 data["current_stage"] = stage_mapping[data["current_stage"]]
+        
+        # Handle missing is_active field for existing users
+        if "is_active" not in data:
+            data["is_active"] = True
         
         return cls(**data)
 
