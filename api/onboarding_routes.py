@@ -17,7 +17,7 @@ from services.analysis_storage_service import analysis_storage_service
 from core.analysis_models import AnalysisType
 from api.auth_routes import security
 
-router = APIRouter(prefix="/onboarding", tags=["onboarding"])
+router = APIRouter(prefix="/onboarding")
 
 
 async def get_current_user_email(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:

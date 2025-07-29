@@ -9,7 +9,7 @@ from services.user_management_service import user_management_service
 from services.auth_service import auth_service
 from api.auth_routes import security
 
-router = APIRouter(prefix="/users", tags=["users"])
+router = APIRouter(prefix="/users")
 
 
 async def get_current_user_email(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:

@@ -87,7 +87,7 @@ app.add_middleware(
 app.include_router(competitor_router, prefix="/api/v1", tags=["Competitor Analysis"])
 app.include_router(persona_router, prefix="/api/v1", tags=["Persona Analysis"])
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["Authentication"])
-app.include_router(user_router, prefix="/api/v1/users", tags=["User Management"])
+app.include_router(user_router, prefix="/api/v1", tags=["User Management"])
 app.include_router(enhanced_analysis_router, prefix="/api/v1/enhanced", tags=["Enhanced Analysis"])
 app.include_router(feedback_router, prefix="/api/v1", tags=["Feedback & Analytics"])
 app.include_router(market_sizing_router, tags=["Market Sizing"])
